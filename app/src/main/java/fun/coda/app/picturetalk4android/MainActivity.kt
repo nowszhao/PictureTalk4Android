@@ -125,6 +125,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntSize
+import com.google.gson.annotations.SerializedName
 
 enum class Screen(val title: String) {
     Home("首页"),
@@ -141,7 +147,9 @@ data class Word(
 )
 
 data class Sentence(
+    @SerializedName("text")
     val english: String? = null,
+    @SerializedName("translation")
     val chinese: String? = null
 )
 
@@ -323,7 +331,7 @@ class KimiService {
         fileDetail: FileDetailResponse,
         chatId: String
     ): AnalysisResponse {
-        Log.d(TAG, "��始分析图片: fileId=$fileId, fileName=$fileName, fileSize=$fileSize, chatId=$chatId")
+        Log.d(TAG, "开始分析图片: fileId=$fileId, fileName=$fileName, fileSize=$fileSize, chatId=$chatId")
         
         // 创建 FileRef
         val fileRef = FileRef(
@@ -353,7 +361,7 @@ class KimiService {
                         - 单词所在的图片位置：包括 x 和 y 坐标（归一化到 0~1 范围，保留四位小数点）。
                    - 意：单词指示应标记物品中的一个具，单词之间的位置不要重叠。
                 2、句子
-                  - 使用一句最简单、确的英语描图片内容。
+                  - 使用句最简单、确的英语描图片内容。
                   - 提供地道的中文翻译。
                   - 返回格式
                      - 请以 标准 JSON 格式 返回结果，下：
@@ -381,7 +389,7 @@ class KimiService {
         )
 
         val requestJson = Gson().toJson(analysisRequest)
-        Log.d(TAG, "发送的请求体: $requestJson")
+        Log.d(TAG, "发送的请求: $requestJson")
 
         // 创建请求
         val request = Request.Builder()
@@ -466,7 +474,7 @@ class KimiService {
                 }
             }
 
-            Log.d(TAG, "SSE流结束，总事件数: $totalEvents, JSON事件数: $jsonEvents")
+            Log.d(TAG, "SSE流结束，��事件数: $totalEvents, JSON事件数: $jsonEvents")
             val finalResult = result.toString()
             Log.d(TAG, "最终结果: '$finalResult'")
             
@@ -600,7 +608,7 @@ class MainActivity : ComponentActivity() {
     internal var currentAnalysis: AnalysisResponse? = null
         private set
 
-    // 重添 pickImageLauncher
+    // ���添 pickImageLauncher
     internal val pickImageLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
@@ -628,7 +636,7 @@ class MainActivity : ComponentActivity() {
                 // 获取文件路径
                 val filePath = when (uri.scheme) {
                     "file" -> uri.path  // 直接使用文件路径
-                    "content" -> getRealPathFromURI(uri)  // 内容 URI 需要���换
+                    "content" -> getRealPathFromURI(uri)  // 内容 URI 需要转换
                     else -> null
                 }
                 
@@ -668,7 +676,7 @@ class MainActivity : ComponentActivity() {
                 // 获取预签名 URL
                 val preSignedURL = kimiService.getPreSignedURL(file.name)
                 
-                // 上传文件到预签名 URL
+                // 上传���件到预签名 URL
                 kimiService.uploadFile(file, preSignedURL.url)
                 
                 // 获取文件详情
@@ -897,7 +905,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 加获取真实文件路径的辅助方
+    // 加获取真实文件路径的辅助方法
     private fun getRealPathFromURI(uri: Uri): String? {
         val projection = arrayOf(MediaStore.Images.Media.DATA)
         val cursor = contentResolver.query(uri, projection, null, null, null)
@@ -1085,8 +1093,8 @@ fun ImageWithWords(
                     ) {
                         WordCard(
                             word = word,
-                            isSelected = selectedWord == word.word,
-                            onClick = { selectedWord = if (selectedWord == word.word) null else word.word }
+                            expanded = selectedWord == word.word,
+                            onExpandChange = { selectedWord = if (selectedWord == word.word) null else word.word }
                         )
                     }
                 }
@@ -1136,15 +1144,13 @@ fun ImageWithWords(
 @Composable
 private fun WordCard(
     word: WordEntity,
-    isSelected: Boolean,
-    onClick: () -> Unit
+    expanded: Boolean,
+    onExpandChange: () -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    
     Card(
         modifier = Modifier
             .padding(4.dp)
-            .clickable { onClick() },
+            .clickable(onClick = onExpandChange),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
         ),
@@ -1160,7 +1166,7 @@ private fun WordCard(
                     fontWeight = FontWeight.Bold
                 )
             }
-            if (isSelected) {
+            if (expanded) {
                 word.phoneticsymbols?.let {
                     Text(
                         text = it,
@@ -1197,8 +1203,10 @@ fun ProfileScreen(
 @Composable
 fun HomeScreen(analysisResults: List<ImageAnalysisEntity>) {
     val pagerState = rememberPagerState(pageCount = { analysisResults.size })
+    var imageSize by remember { mutableStateOf(IntSize.Zero) }
     
     Box(modifier = Modifier.fillMaxSize()) {
+        // 垂直滑动的图片列表
         VerticalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize()
@@ -1209,8 +1217,6 @@ fun HomeScreen(analysisResults: List<ImageAnalysisEntity>) {
                     .fillMaxSize()
                     .background(Color.Black)
             ) {
-                var imageSize by remember { mutableStateOf(Size.Zero) }
-                
                 // 图片
                 AsyncImage(
                     model = Uri.parse(analysis.imageUri),
@@ -1218,76 +1224,126 @@ fun HomeScreen(analysisResults: List<ImageAnalysisEntity>) {
                     modifier = Modifier
                         .fillMaxSize()
                         .onGloballyPositioned { coordinates ->
-                            imageSize = Size(
-                                coordinates.size.width.toFloat(),
-                                coordinates.size.height.toFloat()
-                            )
+                            imageSize = coordinates.size
                         },
                     contentScale = ContentScale.Crop
                 )
                 
-                // 添加半透明遮罩
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.2f)))
-                
                 // 单词卡片
-                if (imageSize != Size.Zero) {
-                    analysis.words.forEach { word ->
-                        word.location?.let { location ->
-                            val (x, y) = location.split(",").map { it.trim().toFloat() }
-                            Box(
-                                modifier = Modifier
-                                    .offset {
-                                        IntOffset(
-                                            x = (x * imageSize.width).roundToInt(),
-                                            y = (y * imageSize.height).roundToInt()
-                                        )
-                                    }
-                            ) {
-                                var isSelected by remember { mutableStateOf(false) }
-                                WordCard(
-                                    word = word,
-                                    isSelected = isSelected,
-                                    onClick = { isSelected = !isSelected }
+                analysis.words.forEach { word ->
+                    word.location?.let { location ->
+                        val (x, y) = location.split(",").map { it.trim().toFloat() }
+                        Box(
+                            modifier = Modifier.offset {
+                                IntOffset(
+                                    x = (x * imageSize.width).roundToInt(),
+                                    y = (y * imageSize.height).roundToInt()
                                 )
                             }
+                        ) {
+                            var isSelected by remember { mutableStateOf(false) }
+                            WordCard(
+                                word = word,
+                                expanded = isSelected,
+                                onExpandChange = { isSelected = !isSelected }
+                            )
                         }
                     }
                 }
-                
+
                 // 句子显示在底部
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
                 ) {
-                    analysis.sentence.let { sentence ->
-                        Surface(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 16.dp),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-                            shape = MaterialTheme.shapes.medium
-                        ) {
+                    var expanded by remember { mutableStateOf(false) }
+                    
+                    // 渐变背景
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.6f),
+                                        Color.Black.copy(alpha = 0.8f)
+                                    ),
+                                    startY = 0f,
+                                    endY = 300f
+                                )
+                            )
+                            .clickable { expanded = !expanded }
+                            .padding(16.dp, 32.dp)
+                    ) {
+                        analysis.sentence.let { sentence ->
                             Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                sentence.english?.let { 
+                                sentence.english?.let { englishText -> 
+                                    val displayText = if (!expanded && englishText.length > 50) {
+                                        englishText.take(50) + "..."
+                                    } else {
+                                        englishText
+                                    }
+                                    
                                     Text(
-                                        text = it,
-                                        style = MaterialTheme.typography.bodyMedium,
+                                        text = displayText,
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            shadow = Shadow(
+                                                color = Color.Black.copy(alpha = 0.8f),
+                                                offset = Offset(2f, 2f),
+                                                blurRadius = 5f
+                                            )
+                                        ),
+                                        color = Color.White,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
+                                        fontSize = 20.sp,
+                                        lineHeight = 26.sp
                                     )
                                 }
-                                sentence.chinese?.let {
+                                
+                                sentence.chinese?.let { chineseText ->
+                                    val displayText = if (!expanded && chineseText.length > 30) {
+                                        chineseText.take(30) + "..."
+                                    } else {
+                                        chineseText
+                                    }
+                                    
                                     Text(
-                                        text = it,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                        text = displayText,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            shadow = Shadow(
+                                                color = Color.Black.copy(alpha = 0.8f),
+                                                offset = Offset(1f, 1f),
+                                                blurRadius = 4f
+                                            )
+                                        ),
+                                        color = Color.White.copy(alpha = 0.95f),
+                                        fontSize = 18.sp,
+                                        lineHeight = 24.sp
+                                    )
+                                }
+                                
+                                // 展开/收起提示
+                                if ((sentence.english?.length ?: 0) > 50 || 
+                                    (sentence.chinese?.length ?: 0) > 30) {
+                                    Text(
+                                        text = if (expanded) "收起" else "更多",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            shadow = Shadow(
+                                                color = Color.Black.copy(alpha = 0.8f),
+                                                offset = Offset(1f, 1f),
+                                                blurRadius = 3f
+                                            )
+                                        ),
+                                        color = Color.White.copy(alpha = 0.7f),
+                                        fontSize = 14.sp,
+                                        modifier = Modifier
+                                            .align(Alignment.End)
+                                            .padding(top = 4.dp)
                                     )
                                 }
                             }
