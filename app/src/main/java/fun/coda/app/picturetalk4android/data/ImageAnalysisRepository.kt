@@ -1,7 +1,5 @@
-package `fun`.coda.app.picturetalk4android.data.repository
+package `fun`.coda.app.picturetalk4android.data
 
-import `fun`.coda.app.picturetalk4android.data.dao.ImageAnalysisDao
-import `fun`.coda.app.picturetalk4android.data.entities.ImageAnalysisEntity
 import kotlinx.coroutines.flow.Flow
 
 class ImageAnalysisRepository(private val imageAnalysisDao: ImageAnalysisDao) {

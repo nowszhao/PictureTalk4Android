@@ -5,9 +5,6 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import `fun`.coda.app.picturetalk4android.data.dao.ImageAnalysisDao
-import `fun`.coda.app.picturetalk4android.data.entities.Converters
-import `fun`.coda.app.picturetalk4android.data.entities.ImageAnalysisEntity
 
 @Database(entities = [ImageAnalysisEntity::class], version = 1)
 @TypeConverters(Converters::class)

@@ -1,9 +1,8 @@
-package `fun`.coda.app.picturetalk4android.data.dao
+package `fun`.coda.app.picturetalk4android.data
 
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
-import `fun`.coda.app.picturetalk4android.data.entities.ImageAnalysisEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
