@@ -17,8 +17,23 @@ import java.util.concurrent.TimeUnit
 class KimiService {
     companion object {
         private const val TAG = "KimiService"
-        private const val AUTH_TOKEN = "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ1c2VyLWNlbnRlciIsImV4cCI6MTczOTU0NzQ3OCwiaWF0IjoxNzMxNzcxNDc4LCJqdGkiOiJjc3Nib2xuZDBwODBpaGswYmIwMCIsInR5cCI6ImFjY2VzcyIsImFwcF9pZCI6ImtpbWkiLCJzdWIiOiJjb2ZzamI5a3FxNHR0cmdhaGhxZyIsInNwYWNlX2lkIjoiY29mc2piOWtxcTR0dHJnYWhocGciLCJhYnN0cmFjdF91c2VyX2lkIjoiY29mc2piOWtxcTR0dHJnYWhocDAifQ.fPEyGwA2GNsrBAPoBVJwGde6BSdRViykCodDOwDeyeabxIuAO8dtZZ8x9gsk9kxJyknfWZ1JG2pZOnMQbQmf9w"  // 替换你的实际 token
         private const val BASE_URL = "https://kimi.moonshot.cn/api"
+        
+        private var authToken: String? = null
+        private var apiKey: String? = null
+        
+        fun configure(token: String?, key: String?) {
+            authToken = token
+            apiKey = key
+        }
+        
+        fun getAuthHeader(): String {
+            return when {
+                !authToken.isNullOrBlank() -> "Bearer $authToken"
+                !apiKey.isNullOrBlank() -> "Bearer $apiKey"
+                else -> throw IllegalStateException("Neither auth token nor API key is configured")
+            }
+        }
     }
 
     private val client = OkHttpClient.Builder()
@@ -31,7 +46,7 @@ class KimiService {
         val request = Request.Builder()
             .url("$BASE_URL/pre-sign-url")
             .post("""{"action":"image","name":"$fileName"}""".toRequestBody("application/json".toMediaType()))
-            .addHeader("Authorization", "Bearer $AUTH_TOKEN")
+            .addHeader("Authorization", getAuthHeader())
             .build()
 
         return withContext(Dispatchers.IO) {
@@ -79,7 +94,7 @@ class KimiService {
                     "kimiplusId": "kimi"
                 }
             """.trimIndent().toRequestBody("application/json".toMediaType()))
-            .addHeader("Authorization", "Bearer $AUTH_TOKEN")
+            .addHeader("Authorization", getAuthHeader())
             .build()
 
         return withContext(Dispatchers.IO) {
@@ -167,7 +182,7 @@ class KimiService {
         val request = Request.Builder()
             .url("$BASE_URL/chat/$chatId/completion/stream")
             .post(requestJson.toRequestBody("application/json".toMediaType()))
-            .addHeader("Authorization", "Bearer $AUTH_TOKEN")
+            .addHeader("Authorization", getAuthHeader())
             .build()
 
         return withContext(Dispatchers.IO) {
@@ -246,7 +261,7 @@ class KimiService {
                 }
             }
 
-            Log.d(TAG, "SSE流结束，��事件数: $totalEvents, JSON事件数: $jsonEvents")
+            Log.d(TAG, "SSE流结束，事件数: $totalEvents, JSON事件数: $jsonEvents")
             val finalResult = result.toString()
             Log.d(TAG, "最终结果: '$finalResult'")
 
@@ -295,7 +310,7 @@ class KimiService {
                     json.toRequestBody("application/json".toMediaType())
                 }
             )
-            .addHeader("Authorization", "Bearer $AUTH_TOKEN")
+            .addHeader("Authorization", getAuthHeader())
             .build()
 
         return withContext(Dispatchers.IO) {

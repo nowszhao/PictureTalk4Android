@@ -108,6 +108,16 @@ import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import kotlin.math.roundToInt
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 
 enum class Screen(val title: String) {
     Home("首页"),
@@ -118,6 +128,11 @@ enum class Screen(val title: String) {
 
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        private const val PREF_NAME = "kimi_config"
+        private const val KEY_AUTH_TOKEN = "auth_token"
+        private const val KEY_API_KEY = "api_key"
+    }
 
     val analysisResults = mutableStateListOf<ImageAnalysisEntity>()
     private lateinit var repository: ImageAnalysisRepository
@@ -146,15 +161,6 @@ class MainActivity : ComponentActivity() {
     internal val kimiService = KimiService()
     internal var currentAnalysis: AnalysisResponse? = null
         private set
-
-    // ���添 pickImageLauncher
-    internal val pickImageLauncher = registerForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { 
-            startCrop(it)  // 选择图片后先裁剪
-        }
-    }
 
     // 添加 cropLauncher 定义
     private val cropLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -215,7 +221,7 @@ class MainActivity : ComponentActivity() {
                 // 获取预签名 URL
                 val preSignedURL = kimiService.getPreSignedURL(file.name)
                 
-                // 上传���件到预签名 URL
+                // 上传文件到预签名 URL
                 kimiService.uploadFile(file, preSignedURL.url)
                 
                 // 获取文件详情
@@ -272,6 +278,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        loadKimiConfig()
         
         // Initialize repository
         val database = AppDatabase.getDatabase(this)
@@ -504,6 +511,29 @@ class MainActivity : ComponentActivity() {
             ).show()
         }
     }
+
+    internal fun saveKimiConfig(token: String?, apiKey: String?) {
+        getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit().apply {
+            putString(KEY_AUTH_TOKEN, token)
+            putString(KEY_API_KEY, apiKey)
+            apply()
+        }
+        KimiService.configure(token, apiKey)
+    }
+
+    private fun loadKimiConfig() {
+        val prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+        val token = prefs.getString(KEY_AUTH_TOKEN, null)
+        val apiKey = prefs.getString(KEY_API_KEY, null)
+        KimiService.configure(token, apiKey)
+    }
+
+    // 添加 pickImageLauncher
+    internal val pickImageLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { processImage(it) }
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -580,7 +610,6 @@ private fun MainContent() {
             }
             composable(Screen.Profile.name) { 
                 ProfileScreen(
-                    pickImageLauncher = activity.pickImageLauncher,
                     activity = activity
                 )
             }
@@ -726,15 +755,111 @@ private fun WordCard(
 }
 
 @Composable
-fun ProfileScreen(
-    pickImageLauncher: ActivityResultLauncher<String>,
-    activity: MainActivity
-) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+fun ProfileScreen(activity: MainActivity) {
+    var authToken by remember { mutableStateOf("") }
+    var apiKey by remember { mutableStateOf("") }
+    var showDialog by remember { mutableStateOf(false) }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("我的 - 版本信息")
+        // KIMI 配置卡片
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "KIMI API 配置",
+                    style = MaterialTheme.typography.titleLarge
+                )
+                
+                OutlinedButton(
+                    onClick = { showDialog = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("配置 KIMI API")
+                }
+            }
+        }
+        
+        // 版本信息卡片
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "版本信息",
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Version 1.0.0",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+    }
+    
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("配置 KIMI API") },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = authToken,
+                        onValueChange = { authToken = it },
+                        label = { Text("Auth Token") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = apiKey,
+                        onValueChange = { apiKey = it },
+                        label = { Text("API Key") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = "请至少填写其中一项",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        activity.saveKimiConfig(
+                            token = authToken.takeIf { it.isNotBlank() },
+                            apiKey = apiKey.takeIf { it.isNotBlank() }
+                        )
+                        showDialog = false
+                    }
+                ) {
+                    Text("保存")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }
 
@@ -745,7 +870,7 @@ fun HomeScreen(analysisResults: List<ImageAnalysisEntity>) {
     var imageSize by remember { mutableStateOf(IntSize.Zero) }
     
     Box(modifier = Modifier.fillMaxSize()) {
-        // 垂直滑动的图片列表
+        // 垂直滑动的图��列表
         VerticalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize()
