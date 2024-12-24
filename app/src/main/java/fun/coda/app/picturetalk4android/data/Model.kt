@@ -1,7 +1,17 @@
-import android.net.Uri
-import com.google.gson.annotations.SerializedName
+package `fun`.coda.app.picturetalk4android.data
 
-// 在 MainActivity.kt 顶部添加数据模型
+import androidx.room.Embedded
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.PrimaryKey
+import androidx.room.Relation
+import androidx.room.TypeConverter
+import com.google.gson.Gson
+import com.google.gson.annotations.SerializedName
+import java.util.Date
+
+
 data class Word(
     val word: String? = null,
     val phoneticsymbols: String? = null,
@@ -21,10 +31,6 @@ data class AnalysisResponse(
     val sentence: Sentence
 )
 
-data class SSEEvent(
-    val event: String,
-    val data: String? = null
-)
 
 // 添加数据模型
 data class FileDetail(
@@ -99,8 +105,74 @@ data class FileDetailResponse(
     val meta: FileMeta
 )
 
-// 添加新的数据类
-data class ImageAnalysis(
-    val uri: Uri,
-    val analysis: AnalysisResponse
+
+@Entity(tableName = "image_analyses")
+data class ImageAnalysisEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val imageUri: String,
+    val sentence: SentenceEntity,
+    val createdAt: Date = Date()
 )
+
+@Entity(
+    tableName = "word_table",
+    foreignKeys = [
+        ForeignKey(
+            entity = ImageAnalysisEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["image_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("image_id")]
+)
+data class WordEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val image_id: Long,
+    val word: String?,
+    val phoneticsymbols: String?,
+    val explanation: String?,
+    val location: String?,
+    var offset_x: Float = 0f,
+    var offset_y: Float = 0f
+)
+
+data class ImageAnalysisWithWords(
+    @Embedded val analysis: ImageAnalysisEntity,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "image_id"
+    )
+    val words: List<WordEntity>
+)
+
+data class SentenceEntity(
+    val english: String? = null,
+    val chinese: String? = null
+)
+
+class Converters {
+    private val gson = Gson()
+
+    @TypeConverter
+    fun fromSentence(value: SentenceEntity): String {
+        return gson.toJson(value)
+    }
+
+    @TypeConverter
+    fun toSentence(value: String): SentenceEntity {
+        return gson.fromJson(value, SentenceEntity::class.java)
+    }
+
+    @TypeConverter
+    fun fromDate(value: Date): Long {
+        return value.time
+    }
+
+    @TypeConverter
+    fun toDate(value: Long): Date {
+        return Date(value)
+    }
+}

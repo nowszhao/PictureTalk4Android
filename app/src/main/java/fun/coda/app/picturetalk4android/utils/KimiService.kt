@@ -1,3 +1,6 @@
+package `fun`.coda.app.picturetalk4android.utils
+
+
 import android.util.Log
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
@@ -13,10 +16,11 @@ import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import `fun`.coda.app.picturetalk4android.data.*
 
 class KimiService {
     companion object {
-        private const val TAG = "KimiService"
+        private const val TAG = "`fun`.coda.app.picturetalk4android.utils.KimiService"
         private const val BASE_URL = "https://kimi.moonshot.cn/api"
         
         private var authToken: String? = null
@@ -56,25 +60,6 @@ class KimiService {
                 val responseBody = response.body!!.string()
                 Log.d(TAG, "获取预签名URL成功: $responseBody")
                 Gson().fromJson(responseBody, PreSignedURLResponse::class.java)
-            }
-        }
-    }
-
-    suspend fun uploadImage(url: String, imageData: ByteArray) {
-        Log.d(TAG, "开始上传图片: $url")
-        val request = Request.Builder()
-            .url(url)
-            .put(imageData.toRequestBody("image/jpeg".toMediaType()))
-            .build()
-
-        withContext(Dispatchers.IO) {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    val errorBody = response.body?.string() ?: "Unknown error"
-                    Log.e(TAG, "上传图片失败: $errorBody")
-                    throw IOException("上传图片失败: ${response.code}")
-                }
-                Log.d(TAG, "上传图片成功")
             }
         }
     }
