@@ -64,7 +64,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -131,6 +130,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.rememberCoroutineScope
 import `fun`.coda.app.picturetalk4android.data.ImageAnalysisWithWords
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.camera.core.AspectRatio
+import android.graphics.Bitmap
+import android.util.Size
 
 enum class Screen(val title: String) {
     Home("首页"),
@@ -191,14 +196,15 @@ class MainActivity : ComponentActivity() {
         )
 
         val uCrop = UCrop.of(uri, destinationUri)
-            .withAspectRatio(9f, 16f)  // 修改为 9:16 的全屏比例
-            .withMaxResultSize(1080, 1920)  // 调整最大尺寸为全屏比例
-            .useSourceImageAspectRatio()  // 初始显示时使用原图比例
+            .withAspectRatio(9f, 16f)  // 固定9:16比例
+            .withMaxResultSize(1080, 1920)
             .withOptions(UCrop.Options().apply {
+                setCompressionFormat(Bitmap.CompressFormat.JPEG)  // 指定输出格式
+                setCompressionQuality(95)  // 设置压缩质量
                 setHideBottomControls(false)
-                setFreeStyleCropEnabled(true)  // 允许自由调整裁剪框
-                setShowCropGrid(true)  // 显示裁剪网格
-                setShowCropFrame(true)  // 显示裁剪框
+                setFreeStyleCropEnabled(false)  // 禁用自由裁剪
+                setShowCropGrid(true)
+                setShowCropFrame(true)
                 setStatusBarColor(getColor(android.R.color.black))
                 setToolbarColor(getColor(android.R.color.black))
                 setToolbarWidgetColor(getColor(android.R.color.white))
@@ -208,7 +214,7 @@ class MainActivity : ComponentActivity() {
             cropLauncher.launch(uCrop.getIntent(this))
         } catch (e: Exception) {
             Log.e("MainActivity", "启动裁剪失败", e)
-            // 如果裁剪失败，直接处理原图
+            Toast.makeText(this, "裁剪功能不可用，将直接处理原图", Toast.LENGTH_SHORT).show()
             processImage(uri)
         }
     }
@@ -366,7 +372,7 @@ class MainActivity : ComponentActivity() {
     // 添加 MediaPlayer 用于播放音频
     private var mediaPlayer: MediaPlayer? = null
     
-    // 添加播放音频���方法
+    // 添加播放音频方法
     internal fun playWordAudio(word: String) {
         try {
             // 释放之前的 MediaPlayer
@@ -610,11 +616,18 @@ class MainActivity : ComponentActivity() {
             cameraProvider.unbindAll()
             
             // 设置预览
-            val preview = Preview.Builder().build()
-            preview.setSurfaceProvider(previewView.surfaceProvider)
-            
+            val preview = Preview.Builder()
+                .setTargetRotation(previewView.display.rotation)
+                .setTargetResolution(Size(720, 1280))  // 16:9 分辨率
+                .build()
+                .also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
+
             // 设置图像捕获
             imageCapture = ImageCapture.Builder()
+                .setTargetRotation(previewView.display.rotation)
+                .setTargetResolution(Size(1080, 1920))  // 更高的拍照分辨率
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                 .build()
             
@@ -774,7 +787,7 @@ fun ImageWithWords(
     imageAnalysis: ImageAnalysisWithWords,
     modifier: Modifier = Modifier
 ) {
-    var imageSize by remember { mutableStateOf(Size.Zero) }
+    var imageSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedWord by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -789,15 +802,12 @@ fun ImageWithWords(
             modifier = Modifier
                 .fillMaxSize()
                 .onGloballyPositioned { coordinates ->
-                    imageSize = Size(
-                        coordinates.size.width.toFloat(),
-                        coordinates.size.height.toFloat()
-                    )
+                    imageSize = coordinates.size
                 },
             contentScale = ContentScale.Crop
         )
         
-        if (imageSize != Size.Zero) {
+        if (imageSize != IntSize.Zero) {
             for (word in imageAnalysis.words) {
                 word.location?.let { location ->
                     var offset by remember { 
@@ -1057,7 +1067,6 @@ fun ProfileScreen(activity: MainActivity) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(analysisResults: List<ImageAnalysisWithWords>) {
-    // 使用 VerticalPager 代替 LazyColumn 实现全屏滑动
     val pagerState = rememberPagerState(pageCount = { analysisResults.size })
     
     VerticalPager(
@@ -1065,6 +1074,8 @@ fun HomeScreen(analysisResults: List<ImageAnalysisWithWords>) {
         modifier = Modifier.fillMaxSize()
     ) { page ->
         val analysis = analysisResults[page]
+        var isExpanded by remember { mutableStateOf(false) }
+        
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1089,6 +1100,7 @@ fun HomeScreen(analysisResults: List<ImageAnalysisWithWords>) {
                             )
                         )
                     )
+                    .clickable { isExpanded = !isExpanded }
                     .padding(16.dp)
             ) {
                 Column(
@@ -1099,13 +1111,31 @@ fun HomeScreen(analysisResults: List<ImageAnalysisWithWords>) {
                     Text(
                         text = analysis.analysis.sentence.english ?: "",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White
+                        color = Color.White,
+                        maxLines = if (isExpanded) Int.MAX_VALUE else 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    // 中文翻译
-                    Text(
-                        text = analysis.analysis.sentence.chinese ?: "",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.8f)
+                    
+                    // 展开状态显示中文翻译
+                    if (isExpanded) {
+                        Text(
+                            text = analysis.analysis.sentence.chinese ?: "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+                    
+                    // 展开/收起指示器
+                    Icon(
+                        imageVector = if (isExpanded) 
+                            Icons.Default.KeyboardArrowUp 
+                        else 
+                            Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (isExpanded) "收起" else "展开",
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(24.dp)
+                            .align(Alignment.CenterHorizontally)
                     )
                 }
             }
@@ -1131,6 +1161,7 @@ fun CameraScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                     implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                    scaleType = PreviewView.ScaleType.FILL_CENTER  // 修改缩放类型
                     previewView = this
                 }
             },
@@ -1139,7 +1170,11 @@ fun CameraScreen(
 
         LaunchedEffect(previewView) {
             previewView?.let { preview ->
-                activity.startCamera(preview, lifecycleOwner)
+                startCamera(
+                    activity,
+                    preview,
+                    lifecycleOwner
+                )
             }
         }
 
@@ -1183,4 +1218,56 @@ fun CameraScreen(
             }
         }
     }
+}
+
+private suspend fun startCamera(
+    activity: MainActivity,
+    previewView: PreviewView,
+    lifecycleOwner: LifecycleOwner
+) = suspendCoroutine { continuation ->
+    val cameraProviderFuture = ProcessCameraProvider.getInstance(activity)
+    
+    cameraProviderFuture.addListener({
+        try {
+            val cameraProvider = cameraProviderFuture.get()
+            
+            // 设置预览
+            val preview = Preview.Builder()
+                .setTargetRotation(previewView.display.rotation)
+                .setTargetResolution(Size(720, 1280))  // 16:9 分辨率
+                .build()
+                .also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
+
+            // 设置图片捕获
+            val imageCapture = ImageCapture.Builder()
+                .setTargetRotation(previewView.display.rotation)
+                .setTargetResolution(Size(1080, 1920))  // 更高的拍照分辨率
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .build()
+
+            activity.imageCapture = imageCapture
+
+            // 选择后置摄像头
+            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+            try {
+                cameraProvider.unbindAll()
+                cameraProvider.bindToLifecycle(
+                    lifecycleOwner,
+                    cameraSelector,
+                    preview,
+                    imageCapture
+                )
+                continuation.resume(Unit)
+            } catch (e: Exception) {
+                Log.e("MainActivity", "相机绑定失败", e)
+                continuation.resumeWith(Result.failure(e))
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "相机启动失败", e)
+            continuation.resumeWith(Result.failure(e))
+        }
+    }, ContextCompat.getMainExecutor(activity))
 }
