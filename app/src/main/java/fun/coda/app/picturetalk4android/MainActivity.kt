@@ -123,6 +123,14 @@ import android.os.Looper
 import android.content.Intent
 import androidx.compose.material3.Divider
 import android.media.MediaPlayer
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.rememberCoroutineScope
+import `fun`.coda.app.picturetalk4android.data.ImageAnalysisWithWords
+import androidx.compose.foundation.lazy.items
 
 enum class Screen(val title: String) {
     Home("首页"),
@@ -138,7 +146,7 @@ class MainActivity : ComponentActivity() {
         private const val KEY_AUTH_TOKEN = "auth_token"
     }
 
-    val analysisResults = mutableStateListOf<ImageAnalysisEntity>()
+    val analysisResults = mutableStateListOf<ImageAnalysisWithWords>()
     private lateinit var repository: ImageAnalysisRepository
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -310,28 +318,29 @@ class MainActivity : ComponentActivity() {
                 // 创建并保存 ImageAnalysisEntity
                 val imageAnalysisEntity = ImageAnalysisEntity(
                     imageUri = uri.toString(),
-                    words = analysisResponse.words.map { word ->
-                        WordEntity(
-                            word = word.word,
-                            phoneticsymbols = word.phoneticsymbols,
-                            explanation = word.explanation,
-                            location = word.location
-                        )
-                    },
                     sentence = SentenceEntity(
                         english = analysisResponse.sentence.english,
                         chinese = analysisResponse.sentence.chinese
                     )
                 )
-                
-                Log.d("MainActivity", "保存数据库: $imageAnalysisEntity")
-                repository.insert(imageAnalysisEntity)
+
+                val words = analysisResponse.words.map { word ->
+                    WordEntity(
+                        image_id = 0, // 临时ID，insert时会被更新
+                        word = word.word,
+                        phoneticsymbols = word.phoneticsymbols,
+                        explanation = word.explanation,
+                        location = word.location
+                    )
+                }
+
+                repository.insert(imageAnalysisEntity, words)
                 
             } catch (e: Exception) {
                 Log.e("MainActivity", "图片处理失败", e)
                 when (e) {
                     is IllegalStateException -> {
-                        // KIMI 配置相关错误
+                        // KIMI 配置错误
                         showConfigurationDialog()
                     }
                     else -> {
@@ -357,7 +366,7 @@ class MainActivity : ComponentActivity() {
     // 添加 MediaPlayer 用于播放音频
     private var mediaPlayer: MediaPlayer? = null
     
-    // 添加播放音频的方法
+    // 添加播放音频���方法
     internal fun playWordAudio(word: String) {
         try {
             // 释放之前的 MediaPlayer
@@ -404,9 +413,9 @@ class MainActivity : ComponentActivity() {
         
         // Collect saved analyses
         lifecycleScope.launch {
-            repository.allAnalyses.collect { savedAnalyses ->
+            repository.allAnalyses.collect { analyses ->
                 analysisResults.clear()
-                analysisResults.addAll(savedAnalyses)
+                analysisResults.addAll(analyses)
             }
         }
         
@@ -568,7 +577,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 加获取真实文件��径的辅助方法
+    // 加获取真实文件路径的辅助方法
     private fun getRealPathFromURI(uri: Uri): String? {
         val projection = arrayOf(MediaStore.Images.Media.DATA)
         val cursor = contentResolver.query(uri, projection, null, null, null)
@@ -762,17 +771,20 @@ private fun MainContent() {
 
 @Composable
 fun ImageWithWords(
-    imageAnalysis: ImageAnalysisEntity,
+    imageAnalysis: ImageAnalysisWithWords,
     modifier: Modifier = Modifier
 ) {
     var imageSize by remember { mutableStateOf(Size.Zero) }
-    val density = LocalDensity.current
     var selectedWord by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val repository = remember { 
+        ImageAnalysisRepository(AppDatabase.getDatabase(context).imageAnalysisDao()) 
+    }
     
     Box(modifier = modifier) {
-        // 图片
         AsyncImage(
-            model = Uri.parse(imageAnalysis.imageUri),
+            model = Uri.parse(imageAnalysis.analysis.imageUri),
             contentDescription = null,
             modifier = Modifier
                 .fillMaxSize()
@@ -782,16 +794,19 @@ fun ImageWithWords(
                         coordinates.size.height.toFloat()
                     )
                 },
-            contentScale = ContentScale.Fit
+            contentScale = ContentScale.Crop
         )
         
-        // 单词卡片
         if (imageSize != Size.Zero) {
-            imageAnalysis.words.forEach { word ->
+            for (word in imageAnalysis.words) {
                 word.location?.let { location ->
-                    val (x, y) = location.split(",").map { it.trim().toFloat() }
-                    val xPos = x * imageSize.width
-                    val yPos = y * imageSize.height
+                    var offset by remember { 
+                        mutableStateOf(Offset(word.offset_x, word.offset_y))
+                    }
+                    
+                    val coordinates = location.split(",").map { coord -> coord.trim().toFloat() }
+                    val xPos = coordinates[0] * imageSize.width + offset.x
+                    val yPos = coordinates[1] * imageSize.height + offset.y
                     
                     Box(
                         modifier = Modifier
@@ -801,50 +816,31 @@ fun ImageWithWords(
                                     y = yPos.roundToInt()
                                 )
                             }
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    offset = Offset(
+                                        offset.x + dragAmount.x,
+                                        offset.y + dragAmount.y
+                                    )
+                                    scope.launch {
+                                        repository.updateWordOffsets(
+                                            imageAnalysis.analysis.id,
+                                            word.word ?: "",
+                                            offset.x,
+                                            offset.y
+                                        )
+                                    }
+                                }
+                            }
                     ) {
                         WordCard(
                             word = word,
                             expanded = selectedWord == word.word,
-                            onExpandChange = { selectedWord = if (selectedWord == word.word) null else word.word }
+                            onExpandChange = { 
+                                selectedWord = if (selectedWord == word.word) null else word.word 
+                            }
                         )
-                    }
-                }
-            }
-        }
-        
-        // 句子显示在底部
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-        ) {
-            imageAnalysis.sentence.let { sentence ->
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 16.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        sentence.english?.let { 
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
-                            )
-                        }
-                        sentence.chinese?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                            )
-                        }
                     }
                 }
             }
@@ -1060,196 +1056,56 @@ fun ProfileScreen(activity: MainActivity) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun HomeScreen(analysisResults: List<ImageAnalysisEntity>) {
+fun HomeScreen(analysisResults: List<ImageAnalysisWithWords>) {
+    // 使用 VerticalPager 代替 LazyColumn 实现全屏滑动
     val pagerState = rememberPagerState(pageCount = { analysisResults.size })
-    var imageSize by remember { mutableStateOf(IntSize.Zero) }
     
-    Box(modifier = Modifier.fillMaxSize()) {
-        // 垂直滑动的图片列表
-        VerticalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize()
-        ) { page ->
-            val analysis = analysisResults[page]
+    VerticalPager(
+        state = pagerState,
+        modifier = Modifier.fillMaxSize()
+    ) { page ->
+        val analysis = analysisResults[page]
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            // 图片和单词
+            ImageWithWords(
+                imageAnalysis = analysis,
+                modifier = Modifier.fillMaxSize()
+            )
+            
+            // 底部渐变和句子
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black)
-            ) {
-                // 图片
-                AsyncImage(
-                    model = Uri.parse(analysis.imageUri),
-                    contentDescription = "分析图片",
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .onGloballyPositioned { coordinates ->
-                            imageSize = coordinates.size
-                        },
-                    contentScale = ContentScale.Crop
-                )
-                
-                // 单词卡片
-                analysis.words.forEach { word ->
-                    word.location?.let { location ->
-                        val (x, y) = location.split(",").map { it.trim().toFloat() }
-                        Box(
-                            modifier = Modifier.offset {
-                                IntOffset(
-                                    x = (x * imageSize.width).roundToInt(),
-                                    y = (y * imageSize.height).roundToInt()
-                                )
-                            }
-                        ) {
-                            var isSelected by remember { mutableStateOf(false) }
-                            WordCard(
-                                word = word,
-                                expanded = isSelected,
-                                onExpandChange = { isSelected = !isSelected }
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.7f)
                             )
-                        }
-                    }
-                }
-
-                // 句子显示在底部
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                ) {
-                    var expanded by remember { mutableStateOf(false) }
-                    
-                    // 渐变背景
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color.Black.copy(alpha = 0.6f),
-                                        Color.Black.copy(alpha = 0.8f)
-                                    ),
-                                    startY = 0f,
-                                    endY = 300f
-                                )
-                            )
-                            .clickable { expanded = !expanded }
-                            .padding(16.dp, 32.dp)
-                    ) {
-                        analysis.sentence.let { sentence ->
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                sentence.english?.let { englishText -> 
-                                    val displayText = if (!expanded && englishText.length > 50) {
-                                        englishText.take(50) + "..."
-                                    } else {
-                                        englishText
-                                    }
-                                    
-                                    Text(
-                                        text = displayText,
-                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                            shadow = Shadow(
-                                                color = Color.Black.copy(alpha = 0.8f),
-                                                offset = Offset(2f, 2f),
-                                                blurRadius = 5f
-                                            )
-                                        ),
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 20.sp,
-                                        lineHeight = 26.sp
-                                    )
-                                }
-                                
-                                sentence.chinese?.let { chineseText ->
-                                    val displayText = if (!expanded && chineseText.length > 30) {
-                                        chineseText.take(30) + "..."
-                                    } else {
-                                        chineseText
-                                    }
-                                    
-                                    Text(
-                                        text = displayText,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            shadow = Shadow(
-                                                color = Color.Black.copy(alpha = 0.8f),
-                                                offset = Offset(1f, 1f),
-                                                blurRadius = 4f
-                                            )
-                                        ),
-                                        color = Color.White.copy(alpha = 0.95f),
-                                        fontSize = 18.sp,
-                                        lineHeight = 24.sp
-                                    )
-                                }
-                                
-                                // 展开/收起提示
-                                if ((sentence.english?.length ?: 0) > 50 || 
-                                    (sentence.chinese?.length ?: 0) > 30) {
-                                    Text(
-                                        text = if (expanded) "收起" else "更多",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            shadow = Shadow(
-                                                color = Color.Black.copy(alpha = 0.8f),
-                                                offset = Offset(1f, 1f),
-                                                blurRadius = 3f
-                                            )
-                                        ),
-                                        color = Color.White.copy(alpha = 0.7f),
-                                        fontSize = 14.sp,
-                                        modifier = Modifier
-                                            .align(Alignment.End)
-                                            .padding(top = 4.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun WordCard(word: WordEntity) {
-    var expanded by remember { mutableStateOf(false) }
-    
-    Card(
-        modifier = Modifier
-            .padding(4.dp)
-            .clickable { expanded = !expanded },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(8.dp)
-        ) {
-            word.word?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            if (expanded) {
-                word.phoneticsymbols?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     )
-                }
-                word.explanation?.let {
+                    .padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // 英文句子
                     Text(
-                        text = it,
+                        text = analysis.analysis.sentence.english ?: "",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White
+                    )
+                    // 中文翻译
+                    Text(
+                        text = analysis.analysis.sentence.chinese ?: "",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color.White.copy(alpha = 0.8f)
                     )
                 }
             }

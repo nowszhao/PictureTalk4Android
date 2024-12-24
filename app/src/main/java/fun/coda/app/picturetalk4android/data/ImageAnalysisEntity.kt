@@ -1,8 +1,6 @@
 package `fun`.coda.app.picturetalk4android.data
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
-import androidx.room.TypeConverter
+import androidx.room.*
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.util.Date
@@ -12,16 +10,41 @@ data class ImageAnalysisEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val imageUri: String,
-    val words: List<WordEntity>,
     val sentence: SentenceEntity,
     val createdAt: Date = Date()
 )
 
+@Entity(
+    tableName = "word_table",
+    foreignKeys = [
+        ForeignKey(
+            entity = ImageAnalysisEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["image_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("image_id")]
+)
 data class WordEntity(
-    val word: String? = null,
-    val phoneticsymbols: String? = null,
-    val explanation: String? = null,
-    val location: String? = null
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val image_id: Long,
+    val word: String?,
+    val phoneticsymbols: String?,
+    val explanation: String?,
+    val location: String?,
+    var offset_x: Float = 0f,
+    var offset_y: Float = 0f
+)
+
+data class ImageAnalysisWithWords(
+    @Embedded val analysis: ImageAnalysisEntity,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "image_id"
+    )
+    val words: List<WordEntity>
 )
 
 data class SentenceEntity(
@@ -31,17 +54,6 @@ data class SentenceEntity(
 
 class Converters {
     private val gson = Gson()
-
-    @TypeConverter
-    fun fromWordList(value: List<WordEntity>): String {
-        return gson.toJson(value)
-    }
-
-    @TypeConverter
-    fun toWordList(value: String): List<WordEntity> {
-        val listType = object : TypeToken<List<WordEntity>>() {}.type
-        return gson.fromJson(value, listType)
-    }
 
     @TypeConverter
     fun fromSentence(value: SentenceEntity): String {
