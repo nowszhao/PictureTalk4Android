@@ -118,6 +118,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import android.os.Handler
+import android.os.Looper
+import android.content.Intent
+import androidx.compose.material3.Divider
+import android.media.MediaPlayer
 
 enum class Screen(val title: String) {
     Home("首页"),
@@ -131,7 +136,6 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val PREF_NAME = "kimi_config"
         private const val KEY_AUTH_TOKEN = "auth_token"
-        private const val KEY_API_KEY = "api_key"
     }
 
     val analysisResults = mutableStateListOf<ImageAnalysisEntity>()
@@ -162,18 +166,78 @@ class MainActivity : ComponentActivity() {
     internal var currentAnalysis: AnalysisResponse? = null
         private set
 
-    // 添加 cropLauncher 定义
-    private val cropLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    // 修改 pickImageLauncher 的定义
+    internal val pickImageLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { startCrop(it) }  // 选择图片后先进行裁剪
+    }
+
+    // 确保 startCrop 方法正确实现
+    private fun startCrop(uri: Uri) {
+        val destinationUri = Uri.fromFile(
+            File(
+                getOutputDirectory(),
+                "cropped_${System.currentTimeMillis()}.jpg"
+            )
+        )
+
+        val uCrop = UCrop.of(uri, destinationUri)
+            .withAspectRatio(9f, 16f)  // 修改为 9:16 的全屏比例
+            .withMaxResultSize(1080, 1920)  // 调整最大尺寸为全屏比例
+            .useSourceImageAspectRatio()  // 初始显示时使用原图比例
+            .withOptions(UCrop.Options().apply {
+                setHideBottomControls(false)
+                setFreeStyleCropEnabled(true)  // 允许自由调整裁剪框
+                setShowCropGrid(true)  // 显示裁剪网格
+                setShowCropFrame(true)  // 显示裁剪框
+                setStatusBarColor(getColor(android.R.color.black))
+                setToolbarColor(getColor(android.R.color.black))
+                setToolbarWidgetColor(getColor(android.R.color.white))
+            })
+
+        try {
+            cropLauncher.launch(uCrop.getIntent(this))
+        } catch (e: Exception) {
+            Log.e("MainActivity", "启动裁剪失败", e)
+            // 如果裁剪失败，直接处理原图
+            processImage(uri)
+        }
+    }
+
+    // 确保 cropLauncher 正确处理结果
+    private val cropLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
         if (result.resultCode == RESULT_OK) {
             val resultUri = UCrop.getOutput(result.data!!)
             resultUri?.let { uri ->
                 processImage(uri)
             }
+        } else if (result.resultCode == UCrop.RESULT_ERROR) {
+            val cropError = UCrop.getError(result.data!!)
+            Log.e("MainActivity", "裁剪失败: ${cropError?.message}")
+            Toast.makeText(
+                this,
+                "图片裁剪失败",
+                Toast.LENGTH_SHORT
+            ).show()
         }
+    }
+
+    // 添加状态检查方法
+    fun isKimiConfigured(): Boolean {
+        val prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+        return !prefs.getString(KEY_AUTH_TOKEN, null).isNullOrBlank()
     }
 
     // 修改 processImage 方法
     internal fun processImage(uri: Uri) {
+        if (!isKimiConfigured()) {
+            showConfigurationDialog()
+            return
+        }
+
         lifecycleScope.launch {
             try {
                 Log.d("MainActivity", "开始处理图片: $uri")
@@ -265,14 +329,68 @@ class MainActivity : ComponentActivity() {
                 
             } catch (e: Exception) {
                 Log.e("MainActivity", "图片处理失败", e)
-                Log.e("MainActivity", "详细错误: ${e.message}")
-                e.printStackTrace()
-                Toast.makeText(
-                    this@MainActivity, 
-                    "图片处理失败: ${e.message}", 
-                    Toast.LENGTH_LONG
-                ).show()
+                when (e) {
+                    is IllegalStateException -> {
+                        // KIMI 配置相关错误
+                        showConfigurationDialog()
+                    }
+                    else -> {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "图片处理失败: ${e.message}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
             }
+        }
+    }
+
+    private fun showConfigurationDialog() {
+        Toast.makeText(
+            this,
+            "请先配置 KIMI API 密钥",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
+    // 添加 MediaPlayer 用于播放音频
+    private var mediaPlayer: MediaPlayer? = null
+    
+    // 添加播放音频的方法
+    internal fun playWordAudio(word: String) {
+        try {
+            // 释放之前的 MediaPlayer
+            mediaPlayer?.release()
+            
+            // 创建新的 MediaPlayer
+            mediaPlayer = MediaPlayer().apply {
+                val audioUrl = "https://dict.youdao.com/dictvoice?audio=${word.lowercase()}&type=2"
+                setDataSource(audioUrl)
+                prepareAsync()
+                setOnPreparedListener { mp ->
+                    mp.start()
+                }
+                setOnCompletionListener { mp ->
+                    mp.reset()
+                }
+                setOnErrorListener { mp, what, extra ->
+                    Log.e("MainActivity", "播放音频失败: what=$what, extra=$extra")
+                    Toast.makeText(
+                        this@MainActivity,
+                        "播放音频失败",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    true
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "设置音频源失败", e)
+            Toast.makeText(
+                this@MainActivity,
+                "播放音频失败: ${e.message}",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -298,7 +416,75 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainContent()
+                    val navController = rememberNavController()
+                    
+                    // 修改这部分代码
+                    LaunchedEffect(Unit) {
+                        if (!isKimiConfigured()) {
+                            // 等待导航图设置完成后再导航
+                            navController.graph.let {
+                                navController.navigate(Screen.Profile.name) {
+                                    popUpTo(it.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        }
+                    }
+
+                    Scaffold(
+                        bottomBar = {
+                            NavigationBar {
+                                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                                val currentDestination = navBackStackEntry?.destination
+                                
+                                Screen.values().forEach { screen ->
+                                    NavigationBarItem(
+                                        icon = {
+                                            Icon(
+                                                when (screen) {
+                                                    Screen.Home -> Icons.Default.Home
+                                                    Screen.Camera -> Icons.Default.PhotoCamera
+                                                    Screen.Profile -> Icons.Default.Person
+                                                },
+                                                contentDescription = screen.title
+                                            )
+                                        },
+                                        label = { Text(screen.title) },
+                                        selected = currentDestination?.hierarchy?.any { it.route == screen.name } == true,
+                                        onClick = {
+                                            navController.navigate(screen.name) {
+                                                popUpTo(navController.graph.findStartDestination().id) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    ) { innerPadding ->
+                        NavHost(
+                            navController = navController,
+                            startDestination = Screen.Home.name,
+                            modifier = Modifier.padding(innerPadding)
+                        ) {
+                            composable(Screen.Home.name) { HomeScreen(analysisResults) }
+                            composable(Screen.Camera.name) { 
+                                CameraScreen(
+                                    pickImageLauncher = pickImageLauncher,
+                                    activity = this@MainActivity
+                                )
+                            }
+                            composable(Screen.Profile.name) { 
+                                ProfileScreen(this@MainActivity)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -306,6 +492,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        mediaPlayer?.release()
+        mediaPlayer = null
         cameraExecutor.shutdown()
     }
 
@@ -380,78 +568,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 修改 startCrop 方法，确保正确处理 URI
-    private fun startCrop(sourceUri: Uri) {
-        try {
-            // 确保源文件存在且可访问
-            val inputStream = contentResolver.openInputStream(sourceUri)
-            inputStream?.close()
-
-            // 创建目标文件
-            val destinationUri = Uri.fromFile(File(cacheDir, "cropped_${System.currentTimeMillis()}.jpg"))
-
-            // 创建裁剪意图
-            val uCropIntent = UCrop.of(sourceUri, destinationUri)
-                .withAspectRatio(9f, 16f)
-                .withMaxResultSize(1080, 1920)
-                .withOptions(UCrop.Options().apply {
-                    setCompressionQuality(90)
-                    setHideBottomControls(false)
-                    setFreeStyleCropEnabled(false)
-                    setShowCropFrame(true)
-                    setShowCropGrid(true)
-                    setToolbarColor(ContextCompat.getColor(this@MainActivity, android.R.color.black))
-                    setStatusBarColor(ContextCompat.getColor(this@MainActivity, android.R.color.black))
-                    setToolbarWidgetColor(ContextCompat.getColor(this@MainActivity, android.R.color.white))
-                })
-                .getIntent(this)
-
-            // 启动裁剪
-            cropLauncher.launch(uCropIntent)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(this, "启动裁剪失败: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    // 修改拍照后的处理
-    internal fun takePhoto() {
-        imageCapture?.let { capture ->
-            // 创建临时文件
-            val photoFile = File(
-                getOutputDirectory(),
-                SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
-                    .format(System.currentTimeMillis()) + ".jpg"
-            )
-
-            // 创建输出选项对象
-            val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
-
-            // 拍照
-            capture.takePicture(
-                outputOptions,
-                ContextCompat.getMainExecutor(this),
-                object : ImageCapture.OnImageSavedCallback {
-                    override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                        output.savedUri?.let { uri ->
-                            startCrop(uri)
-                        }
-                    }
-
-                    override fun onError(exc: ImageCaptureException) {
-                        Log.e("MainActivity", "Photo capture failed: ${exc.message}", exc)
-                        Toast.makeText(
-                            this@MainActivity,
-                            "拍照失败: ${exc.message}",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }
-            )
-        }
-    }
-
-    // 加获取真实文件路径的辅助方法
+    // 加获取真实文件��径的辅助方法
     private fun getRealPathFromURI(uri: Uri): String? {
         val projection = arrayOf(MediaStore.Images.Media.DATA)
         val cursor = contentResolver.query(uri, projection, null, null, null)
@@ -512,27 +629,53 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    internal fun saveKimiConfig(token: String?, apiKey: String?) {
+    internal fun saveKimiConfig(token: String?) {
         getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit().apply {
             putString(KEY_AUTH_TOKEN, token)
-            putString(KEY_API_KEY, apiKey)
             apply()
         }
-        KimiService.configure(token, apiKey)
+        KimiService.configure(token, null)
     }
 
     private fun loadKimiConfig() {
         val prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
         val token = prefs.getString(KEY_AUTH_TOKEN, null)
-        val apiKey = prefs.getString(KEY_API_KEY, null)
-        KimiService.configure(token, apiKey)
+        KimiService.configure(token, null)
     }
 
-    // 添加 pickImageLauncher
-    internal val pickImageLauncher = registerForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { processImage(it) }
+    // 添加 takePhoto 方法
+    internal fun takePhoto() {
+        imageCapture?.let { imageCapture ->
+            // 创建带时间戳的图片文件
+            val photoFile = File(
+                getOutputDirectory(),
+                "IMG_${SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+                    .format(Date())}.jpg"
+            )
+
+            val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
+
+            imageCapture.takePicture(
+                outputOptions,
+                ContextCompat.getMainExecutor(this),
+                object : ImageCapture.OnImageSavedCallback {
+                    override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                        val savedUri = Uri.fromFile(photoFile)
+                        // 拍照成功后进行裁剪
+                        startCrop(savedUri)
+                    }
+
+                    override fun onError(exc: ImageCaptureException) {
+                        Log.e("MainActivity", "拍照失败: ${exc.message}", exc)
+                        Toast.makeText(
+                            this@MainActivity,
+                            "拍照失败: ${exc.message}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -713,12 +856,20 @@ fun ImageWithWords(
 private fun WordCard(
     word: WordEntity,
     expanded: Boolean,
-    onExpandChange: () -> Unit
+    onExpandChange: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val activity = context as MainActivity
+    
     Card(
-        modifier = Modifier
+        modifier = modifier
             .padding(4.dp)
-            .clickable(onClick = onExpandChange),
+            .clickable { 
+                onExpandChange()
+                // 点击时播放音频
+                word.word?.let { activity.playWordAudio(it) }
+            },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
         ),
@@ -756,110 +907,154 @@ private fun WordCard(
 
 @Composable
 fun ProfileScreen(activity: MainActivity) {
-    var authToken by remember { mutableStateOf("") }
-    var apiKey by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
-    
-    Column(
+    var authToken by remember { mutableStateOf("") }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        // KIMI 配置卡片
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
+            // 头像区域
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .size(80.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        shape = MaterialTheme.shapes.large
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "KIMI API 配置",
-                    style = MaterialTheme.typography.titleLarge
-                )
-                
-                OutlinedButton(
-                    onClick = { showDialog = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("配置 KIMI API")
-                }
-            }
-        }
-        
-        // 版本信息卡片
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Text(
-                    text = "版本信息",
-                    style = MaterialTheme.typography.titleLarge
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Version 1.0.0",
-                    style = MaterialTheme.typography.bodyMedium
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
-        }
-    }
-    
-    if (showDialog) {
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            title = { Text("配置 KIMI API") },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 用户名/ID
+            Text(
+                text = "Picture Talk",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // 设置项列表
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // KIMI 配置项
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showDialog = true }
+                        .padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    OutlinedTextField(
-                        value = authToken,
-                        onValueChange = { authToken = it },
-                        label = { Text("Auth Token") },
-                        modifier = Modifier.fillMaxWidth()
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                        Column {
+                            Text(
+                                text = "KIMI Token",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            if (!activity.isKimiConfigured()) {
+                                Text(
+                                    text = "未配置",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Default.PhotoCamera,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    OutlinedTextField(
-                        value = apiKey,
-                        onValueChange = { apiKey = it },
-                        label = { Text("API Key") },
-                        modifier = Modifier.fillMaxWidth()
+                }
+
+                Divider(
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                    thickness = 1.dp
+                )
+
+                // 版本信息
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "版本",
+                        style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
-                        text = "请至少填写其中一项",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = "1.0.0",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        activity.saveKimiConfig(
-                            token = authToken.takeIf { it.isNotBlank() },
-                            apiKey = apiKey.takeIf { it.isNotBlank() }
-                        )
-                        showDialog = false
-                    }
-                ) {
-                    Text("保存")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("取消")
-                }
             }
-        )
+        }
+
+        // KIMI Token 配置对话框
+        if (showDialog) {
+            AlertDialog(
+                onDismissRequest = { showDialog = false },
+                title = { Text("配置 KIMI Token") },
+                text = {
+                    Column {
+                        OutlinedTextField(
+                            value = authToken,
+                            onValueChange = { authToken = it },
+                            label = { Text("Token") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            activity.saveKimiConfig(
+                                token = authToken.takeIf { it.isNotBlank() }
+                            )
+                            showDialog = false
+                        }
+                    ) {
+                        Text("保存")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDialog = false }) {
+                        Text("取消")
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -870,7 +1065,7 @@ fun HomeScreen(analysisResults: List<ImageAnalysisEntity>) {
     var imageSize by remember { mutableStateOf(IntSize.Zero) }
     
     Box(modifier = Modifier.fillMaxSize()) {
-        // 垂直滑动的图��列表
+        // 垂直滑动的图片列表
         VerticalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize()

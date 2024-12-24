@@ -20,18 +20,15 @@ class KimiService {
         private const val BASE_URL = "https://kimi.moonshot.cn/api"
         
         private var authToken: String? = null
-        private var apiKey: String? = null
         
         fun configure(token: String?, key: String?) {
             authToken = token
-            apiKey = key
         }
         
         fun getAuthHeader(): String {
             return when {
                 !authToken.isNullOrBlank() -> "Bearer $authToken"
-                !apiKey.isNullOrBlank() -> "Bearer $apiKey"
-                else -> throw IllegalStateException("Neither auth token nor API key is configured")
+                else -> throw IllegalStateException("KIMI Token not configured")
             }
         }
     }
