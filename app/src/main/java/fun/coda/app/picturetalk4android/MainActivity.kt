@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.Icon
@@ -47,6 +48,7 @@ import `fun`.coda.app.picturetalk4android.data.WordEntity
 import `fun`.coda.app.picturetalk4android.ui.screens.CameraScreen
 import `fun`.coda.app.picturetalk4android.ui.screens.HomeScreen
 import `fun`.coda.app.picturetalk4android.ui.screens.ProfileScreen
+import `fun`.coda.app.picturetalk4android.ui.screens.TaskListScreen
 import `fun`.coda.app.picturetalk4android.ui.theme.PictureTalk4AndroidTheme
 import `fun`.coda.app.picturetalk4android.utils.AudioService
 import `fun`.coda.app.picturetalk4android.utils.KimiService
@@ -61,7 +63,12 @@ import java.util.Locale
 enum class Screen(val title: String) {
     Home("首页"),
     Camera("开拍"),
-    Profile("我的")
+    Profile("我的"),
+    TaskList("任务列表");
+
+    companion object {
+        fun bottomNavItems() = listOf(Home, Camera, Profile)
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -304,7 +311,7 @@ class MainActivity : ComponentActivity() {
                                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                                 val currentDestination = navBackStackEntry?.destination
                                 
-                                Screen.values().forEach { screen ->
+                                Screen.bottomNavItems().forEach { screen ->
                                     NavigationBarItem(
                                         icon = {
                                             Icon(
@@ -312,6 +319,7 @@ class MainActivity : ComponentActivity() {
                                                     Screen.Home -> Icons.Default.Home
                                                     Screen.Camera -> Icons.Default.PhotoCamera
                                                     Screen.Profile -> Icons.Default.Person
+                                                    Screen.TaskList -> Icons.Default.List
                                                 },
                                                 contentDescription = screen.title
                                             )
@@ -337,7 +345,14 @@ class MainActivity : ComponentActivity() {
                             startDestination = Screen.Home.name,
                             modifier = Modifier.padding(innerPadding)
                         ) {
-                            composable(Screen.Home.name) { HomeScreen(analysisResults) }
+                            composable(Screen.Home.name) { 
+                                HomeScreen(
+                                    analyses = analysisResults,
+                                    onTaskListClick = {
+                                        navController.navigate(Screen.TaskList.name)
+                                    }
+                                )
+                            }
                             composable(Screen.Camera.name) { 
                                 CameraScreen(
                                     pickImageLauncher = pickImageLauncher,
@@ -346,6 +361,21 @@ class MainActivity : ComponentActivity() {
                             }
                             composable(Screen.Profile.name) { 
                                 ProfileScreen(this@MainActivity)
+                            }
+                            composable(Screen.TaskList.name) {
+                                TaskListScreen(
+                                    analyses = analysisResults,
+                                    onImageClick = { analysis ->
+                                        navController.navigate(Screen.Home.name) {
+                                            popUpTo(Screen.Home.name) {
+                                                inclusive = true
+                                            }
+                                        }
+                                    },
+                                    onBackClick = {
+                                        navController.navigateUp()
+                                    }
+                                )
                             }
                         }
                     }

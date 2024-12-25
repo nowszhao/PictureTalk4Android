@@ -84,4 +84,5 @@ dependencies {
     implementation("androidx.room:room-ktx:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("androidx.compose.material3:material3:1.2.0")
 }

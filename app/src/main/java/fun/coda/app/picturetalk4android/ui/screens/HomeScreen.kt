@@ -19,6 +19,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -52,83 +53,105 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import `fun`.coda.app.picturetalk4android.utils.AudioService
 import `fun`.coda.app.picturetalk4android.data.*
+import androidx.compose.material3.FloatingActionButton
 
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun HomeScreen(analysisResults: List<ImageAnalysisWithWords>) {
-    val pagerState = rememberPagerState(pageCount = { analysisResults.size })
+fun HomeScreen(
+    analyses: List<ImageAnalysisWithWords>,
+    onTaskListClick: () -> Unit,
+    // ... 其他参数
+) {
+    val pagerState = rememberPagerState(pageCount = { analyses.size })
 
-    VerticalPager(
-        state = pagerState,
-        modifier = Modifier.fillMaxSize()
-    ) { page ->
-        val analysis = analysisResults[page]
-        var isExpanded by remember { mutableStateOf(false) }
+    Box(modifier = Modifier.fillMaxSize()) {
+        VerticalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            val analysis = analyses[page]
+            var isExpanded by remember { mutableStateOf(false) }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-        ) {
-            // 图片和单词
-            ImageWithWords(
-                imageAnalysis = analysis,
-                modifier = Modifier.fillMaxSize()
-            )
-
-            // 底部渐变和句子
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.7f)
+                    .fillMaxSize()
+                    .background(Color.Black)
+            ) {
+                // 图片和单词
+                ImageWithWords(
+                    imageAnalysis = analysis,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // 底部渐变和句子
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.7f)
+                                )
                             )
                         )
-                    )
-                    .clickable { isExpanded = !isExpanded }
-                    .padding(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .clickable { isExpanded = !isExpanded }
+                        .padding(16.dp)
                 ) {
-                    // 英文句子
-                    Text(
-                        text = analysis.analysis.sentence.english ?: "",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White,
-                        maxLines = if (isExpanded) Int.MAX_VALUE else 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    // 展开状态显示中文翻译
-                    if (isExpanded) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // 英文句子
                         Text(
-                            text = analysis.analysis.sentence.chinese ?: "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.8f)
+                            text = analysis.analysis.sentence.english ?: "",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.White,
+                            maxLines = if (isExpanded) Int.MAX_VALUE else 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        // 展开状态显示中文翻译
+                        if (isExpanded) {
+                            Text(
+                                text = analysis.analysis.sentence.chinese ?: "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.8f)
+                            )
+                        }
+
+                        // 展开/收起指示器
+                        Icon(
+                            imageVector = if (isExpanded)
+                                Icons.Default.KeyboardArrowUp
+                            else
+                                Icons.Default.KeyboardArrowDown,
+                            contentDescription = if (isExpanded) "收起" else "展开",
+                            tint = Color.White,
+                            modifier = Modifier
+                                .size(24.dp)
+                                .align(Alignment.CenterHorizontally)
                         )
                     }
-
-                    // 展开/收起指示器
-                    Icon(
-                        imageVector = if (isExpanded)
-                            Icons.Default.KeyboardArrowUp
-                        else
-                            Icons.Default.KeyboardArrowDown,
-                        contentDescription = if (isExpanded) "收起" else "展开",
-                        tint = Color.White,
-                        modifier = Modifier
-                            .size(24.dp)
-                            .align(Alignment.CenterHorizontally)
-                    )
                 }
             }
+        }
+
+        // 添加任务按钮
+        FloatingActionButton(
+            onClick = onTaskListClick,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 16.dp),
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        ) {
+            Icon(
+                imageVector = Icons.Default.List,
+                contentDescription = "任务列表",
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
+            )
         }
     }
 }
