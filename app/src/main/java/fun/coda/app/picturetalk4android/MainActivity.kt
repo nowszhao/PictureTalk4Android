@@ -39,6 +39,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.yalantis.ucrop.UCrop
+import `fun`.coda.app.picturetalk4android.data.AnalysisStatus
 import `fun`.coda.app.picturetalk4android.data.AppDatabase
 import `fun`.coda.app.picturetalk4android.data.ImageAnalysisEntity
 import `fun`.coda.app.picturetalk4android.data.ImageAnalysisRepository
@@ -161,97 +162,106 @@ class MainActivity : ComponentActivity() {
             try {
                 Log.d("MainActivity", "开始处理图片: $uri")
 
-                // 获取文件路径
-                val filePath = when (uri.scheme) {
-                    "file" -> uri.path  // 直接使用文件路径
-                    "content" -> getRealPathFromURI(uri)  // 内容 URI 需要转换
-                    else -> null
-                }
-
-                Log.d("MainActivity", "获取到文件路径: $filePath")
-
-                if (filePath == null) {
-                    Log.e("MainActivity", "无法获取文件路径")
-                    throw IOException("无法获取文件路径")
-                }
-
-                val file = File(filePath)
-                if (!file.exists()) {
-                    Log.e("MainActivity", "文件不存在: $filePath")
-                    throw IOException("文件不存在")
-                }
-
-                // 获图片尺寸
-                val options = BitmapFactory.Options().apply {
-                    inJustDecodeBounds = true
-                }
-                BitmapFactory.decodeFile(filePath, options)
-
-                // 创建聊天会话
-                val chatId = kimiService.createChat()
-                Log.d("MainActivity", "创建聊天会话成功: $chatId")
-
-                // 获取预签名 URL
-                val preSignedURL = kimiService.getPreSignedURL(file.name)
-
-                // 上传文件到预签名 URL
-                kimiService.uploadFile(file, preSignedURL.url)
-
-                // 获取文件详情
-                val fileDetail = kimiService.getFileDetail(
-                    fileId = preSignedURL.file_id,
-                    fileName = file.name,
-                    width = options.outWidth.toString(),
-                    height = options.outHeight.toString()
-                )
-
-                // 分析图片
-                val analysisResponse = kimiService.analyzeImage(
-                    fileId = preSignedURL.file_id,
-                    fileName = file.name,
-                    fileSize = file.length().toInt(),
-                    fileDetail = fileDetail,
-                    chatId = chatId
-                )
-
-                Log.d("MainActivity", "分析结果: $analysisResponse")
-
-                // 创建并保存 ImageAnalysisEntity
-                val imageAnalysisEntity = ImageAnalysisEntity(
+                // 创建并保存初始的 ImageAnalysisEntity（状态为 PROCESSING）
+                val initialAnalysis = ImageAnalysisEntity(
                     imageUri = uri.toString(),
-                    sentence = SentenceEntity(
-                        english = analysisResponse.sentence.english,
-                        chinese = analysisResponse.sentence.chinese
-                    )
+                    sentence = SentenceEntity(),
+                    status = AnalysisStatus.PROCESSING
                 )
+                val analysisId = repository.insert(initialAnalysis)  // 保存初始记录并获取ID
 
-                val words = analysisResponse.words.map { word ->
-                    WordEntity(
-                        image_id = 0, // 临时ID，insert时会被更新
-                        word = word.word,
-                        phoneticsymbols = word.phoneticsymbols,
-                        explanation = word.explanation,
-                        location = word.location
+                try {
+                    // 获取文件路径
+                    val filePath = when (uri.scheme) {
+                        "file" -> uri.path
+                        "content" -> getRealPathFromURI(uri)
+                        else -> null
+                    }
+
+                    Log.d("MainActivity", "获取到文件路径: $filePath")
+
+                    if (filePath == null) {
+                        Log.e("MainActivity", "无法获取文件路径")
+                        throw IOException("无法获取文件路径")
+                    }
+
+                    val file = File(filePath)
+                    if (!file.exists()) {
+                        Log.e("MainActivity", "文件不存在: $filePath")
+                        throw IOException("文件不存在")
+                    }
+
+                    // 获图片尺寸
+                    val options = BitmapFactory.Options().apply {
+                        inJustDecodeBounds = true
+                    }
+                    BitmapFactory.decodeFile(filePath, options)
+
+                    // 创建聊天会话
+                    val chatId = kimiService.createChat()
+                    Log.d("MainActivity", "创建聊天会话成功: $chatId")
+
+                    // 获取预签名 URL
+                    val preSignedURL = kimiService.getPreSignedURL(file.name)
+
+                    // 上传文件到预签名 URL
+                    kimiService.uploadFile(file, preSignedURL.url)
+
+                    // 获取文件详情
+                    val fileDetail = kimiService.getFileDetail(
+                        fileId = preSignedURL.file_id,
+                        fileName = file.name,
+                        width = options.outWidth.toString(),
+                        height = options.outHeight.toString()
                     )
+
+                    // 分析图片
+                    val analysisResponse = kimiService.analyzeImage(
+                        fileId = preSignedURL.file_id,
+                        fileName = file.name,
+                        fileSize = file.length().toInt(),
+                        fileDetail = fileDetail,
+                        chatId = chatId
+                    )
+
+                    Log.d("MainActivity", "分析结果: $analysisResponse")
+
+                    // 处理完成后更新状态和内容
+                    repository.updateAnalysis(
+                        analysisId,
+                        SentenceEntity(
+                            english = analysisResponse.sentence.english,
+                            chinese = analysisResponse.sentence.chinese
+                        ),
+                        analysisResponse.words.map { word ->
+                            WordEntity(
+                                image_id = analysisId,
+                                word = word.word,
+                                phoneticsymbols = word.phoneticsymbols,
+                                explanation = word.explanation,
+                                location = word.location
+                            )
+                        },
+                        AnalysisStatus.COMPLETED
+                    )
+
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "处理图片失败", e)
+                    // 处理失败时也要更新状态
+                    repository.updateStatus(analysisId, AnalysisStatus.COMPLETED)
+                    Toast.makeText(
+                        this@MainActivity,
+                        "处理图片失败: ${e.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
-
-                repository.insert(imageAnalysisEntity, words)
-
             } catch (e: Exception) {
-                Log.e("MainActivity", "图片处理失败", e)
-                when (e) {
-                    is IllegalStateException -> {
-                        // KIMI 配置错误
-                        showConfigurationDialog()
-                    }
-                    else -> {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "图片处理失败: ${e.message}",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                }
+                Log.e("MainActivity", "创建初始记录失败", e)
+                Toast.makeText(
+                    this@MainActivity,
+                    "创建任务失败: ${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
     }

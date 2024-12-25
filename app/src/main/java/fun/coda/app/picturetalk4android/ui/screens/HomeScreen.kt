@@ -54,6 +54,7 @@ import kotlin.math.roundToInt
 import `fun`.coda.app.picturetalk4android.utils.AudioService
 import `fun`.coda.app.picturetalk4android.data.*
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Badge
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -139,19 +140,34 @@ fun HomeScreen(
             }
         }
 
-        // 添加任务按钮
-        FloatingActionButton(
-            onClick = onTaskListClick,
+        // 修改任务按钮，添加角标
+        Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .padding(end = 16.dp),
-            containerColor = MaterialTheme.colorScheme.primaryContainer
+                .padding(end = 16.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.List,
-                contentDescription = "任务列表",
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+            FloatingActionButton(
+                onClick = onTaskListClick,
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Icon(
+                    imageVector = Icons.Default.List,
+                    contentDescription = "任务列表",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+
+            // 添加角标
+            val processingCount = analyses.count { it.analysis.status == AnalysisStatus.PROCESSING }
+            if (processingCount > 0) {
+                Badge(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 4.dp, y = (-4).dp)
+                ) {
+                    Text(text = processingCount.toString())
+                }
+            }
         }
     }
 }

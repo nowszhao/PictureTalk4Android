@@ -27,4 +27,14 @@ interface ImageAnalysisDao {
         WHERE image_id = :imageId AND word = :word
     """)
     suspend fun updateWordOffsets(imageId: Long, word: String, offsetX: Float, offsetY: Float)
+
+    @Query("UPDATE image_analyses SET status = :status WHERE id = :analysisId")
+    suspend fun updateStatus(analysisId: Long, status: AnalysisStatus)
+
+    @Query("""
+        UPDATE image_analyses 
+        SET sentence = :sentence, status = :status 
+        WHERE id = :analysisId
+    """)
+    suspend fun updateAnalysis(analysisId: Long, sentence: SentenceEntity, status: AnalysisStatus)
 } 

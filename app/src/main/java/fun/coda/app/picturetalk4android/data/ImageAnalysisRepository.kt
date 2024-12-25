@@ -22,4 +22,24 @@ class ImageAnalysisRepository(private val imageAnalysisDao: ImageAnalysisDao) {
             imageAnalysisDao.updateWordOffsets(imageId, word, offsetX, offsetY)
         }
     }
+
+    suspend fun updateStatus(analysisId: Long, status: AnalysisStatus) {
+        imageAnalysisDao.updateStatus(analysisId, status)
+    }
+
+    suspend fun insert(analysis: ImageAnalysisEntity): Long {
+        return imageAnalysisDao.insert(analysis)
+    }
+
+    suspend fun updateAnalysis(
+        analysisId: Long,
+        sentence: SentenceEntity,
+        words: List<WordEntity>,
+        status: AnalysisStatus
+    ) {
+        withContext(Dispatchers.IO) {
+            imageAnalysisDao.updateAnalysis(analysisId, sentence, status)
+            imageAnalysisDao.insertWords(words)
+        }
+    }
 } 

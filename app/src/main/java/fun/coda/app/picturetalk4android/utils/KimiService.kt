@@ -120,35 +120,29 @@ class KimiService {
         )
 
         val prompt = """
-            我作为一名英语习者。通过片进场化学习英语单词。请根据我提供的图片，分析并返回以下信息：
-                1、单词
-                  - 从图中提取常用的英语单词。
-                  - 提供以下信息：
-                        - 单词
-                        - 音标，式
-                        - 中文解释
-                        - 单词所在的图片位置：包括 x 和 y 坐标（归一化到 0~1 范围，保留四位小数点）。
-                   - 意：单词指示应标记物品中的一个具，单词之间的位置不要重叠。
-                2、句子
-                  - 使用句最简单、确的英语描图片内容。
-                  - 提供地道的中文翻译。
-                  - 返回格式
-                     - 请以 标准 JSON 格式 返回结果，下：
-                        {
-                            "words": [
-                                {
-                                    "word": "Stool",
-                                    "phoneticsymbols": "/stuːl/",
-                                    "explanation": "凳",
-                                    "location": "0.55, 0.65"
-                                },
-                                ...
-                            ],
-                            "sentence": {
-                                "text": "A green plastic stool stands on a wooden floor against a gray wall, near a light switch.",
-                                "translation": "一个绿色的塑料凳子放在木地板上，靠色的墙上，一个灯关。"
-                            }
-                        }
+        我作为一个英语学习者，我想通过图片场景化学习新的英语词块，请分析我提供的图片，提供一下信息：
+        1、词块：
+          - 图片场景中我可以学习到相对我英语水平之上的 Top 8 英语词块，信息包括词块、音标和中文解释、词块所在图片大致位置（词块指向物品中的一个点表示，x 和 y 坐标，归一化到0~1的范围，精度为后四位小数点，词块之间的位置不要重叠）
+          - 英语词块（chunk）是指在语言处理中，作为一个整体来理解和使用的一组词或短语。词块可以是固定搭配、习惯用语、短语动词、常见的表达方式等。它们在语言中频繁出现，具有一定的固定性和连贯性，使得学习者能够更自然地使用语言。
+        2、句子
+          - 使用一句最简单、准确的英语描述图片内容。
+          - 提供地道的中文翻译。
+          - 返回格式，请以 标准 JSON 格式 返回结果，示例如下：
+            {
+                "words": [
+                    {
+                        "word": "emergency brake",
+                        "phoneticsymbols": "/iˈmɜːdʒənsi breɪk/",
+                        "explanation": "紧急刹车",
+                        "location": "0.55, 0.65"
+                    },
+                    ...
+                ],
+                "sentence": {
+                    "text": "The subway car is empty, with handrails, safety strips, and overhead lights clearly visible.",
+                    "translation": "地铁车厢是空的，扶手、安全条和头顶灯清晰可见。"
+                }
+            }
         """.trimIndent()
 
         val analysisRequest = ImageAnalysisRequest(

@@ -112,8 +112,15 @@ data class ImageAnalysisEntity(
     val id: Long = 0,
     val imageUri: String,
     val sentence: SentenceEntity,
-    val createdAt: Date = Date()
+    val createdAt: Date = Date(),
+    val status: AnalysisStatus = AnalysisStatus.PROCESSING
 )
+
+// 添加状态枚举
+enum class AnalysisStatus {
+    PROCESSING,  // 解析中
+    COMPLETED    // 已完成
+}
 
 @Entity(
     tableName = "word_table",
