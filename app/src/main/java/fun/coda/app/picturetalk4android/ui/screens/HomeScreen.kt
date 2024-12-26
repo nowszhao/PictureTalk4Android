@@ -61,6 +61,8 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Badge
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -251,6 +253,7 @@ fun ImageWithWords(
 ) {
     var imageSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedWord by remember { mutableStateOf<String?>(null) }
+    var playedWords by remember { mutableStateOf(setOf<String>()) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repository = remember {
@@ -270,54 +273,118 @@ fun ImageWithWords(
         )
 
         if (imageSize != IntSize.Zero) {
-            for (word in imageAnalysis.words) {
-                word.location?.let { location ->
-                    var offset by remember {
-                        mutableStateOf(Offset(word.offset_x, word.offset_y))
-                    }
+            // 先渲染非选中和非播放的单词
+            imageAnalysis.words
+                .filter { it.word != currentPlayingWord && it.word != selectedWord }
+                .forEach { word ->
+                    RenderWordCard(
+                        word = word,
+                        imageSize = imageSize,
+                        currentPlayingWord = currentPlayingWord,
+                        selectedWord = selectedWord,
+                        playedWords = playedWords,
+                        onSelectedWordChange = { selectedWord = it },
+                        repository = repository,
+                        isTopLayer = false
+                    )
+                }
+            
+            // 渲染选中的单词（如果有）
+            selectedWord?.let { selected ->
+                imageAnalysis.words.find { it.word == selected }?.let { word ->
+                    RenderWordCard(
+                        word = word,
+                        imageSize = imageSize,
+                        currentPlayingWord = currentPlayingWord,
+                        selectedWord = selectedWord,
+                        playedWords = playedWords,
+                        onSelectedWordChange = { selectedWord = it },
+                        repository = repository,
+                        isTopLayer = true
+                    )
+                }
+            }
+            
+            // 最后渲染当前播放的单词（如果有）
+            currentPlayingWord?.let { playing ->
+                imageAnalysis.words.find { it.word == playing }?.let { word ->
+                    RenderWordCard(
+                        word = word,
+                        imageSize = imageSize,
+                        currentPlayingWord = currentPlayingWord,
+                        selectedWord = selectedWord,
+                        playedWords = playedWords,
+                        onSelectedWordChange = { selectedWord = it },
+                        repository = repository,
+                        isTopLayer = true
+                    )
+                }
+            }
+        }
+    }
+}
 
-                    val coordinates = location.split(",").map { coord -> coord.trim().toFloat() }
-                    val xPos = coordinates[0] * imageSize.width + offset.x
-                    val yPos = coordinates[1] * imageSize.height + offset.y
+@Composable
+private fun RenderWordCard(
+    word: WordEntity,
+    imageSize: IntSize,
+    currentPlayingWord: String?,
+    selectedWord: String?,
+    playedWords: Set<String>,
+    onSelectedWordChange: (String?) -> Unit,
+    repository: ImageAnalysisRepository,
+    isTopLayer: Boolean
+) {
+    var offset by remember {
+        mutableStateOf(Offset(word.offset_x ?: 0f, word.offset_y ?: 0f))
+    }
+    val scope = rememberCoroutineScope()
 
-                    Box(
-                        modifier = Modifier
-                            .offset {
-                                IntOffset(
-                                    x = xPos.roundToInt(),
-                                    y = yPos.roundToInt()
-                                )
-                            }
-                            .pointerInput(Unit) {
-                                detectDragGestures { change, dragAmount ->
-                                    change.consume()
-                                    offset = Offset(
-                                        offset.x + dragAmount.x,
-                                        offset.y + dragAmount.y
-                                    )
-                                    scope.launch {
-                                        repository.updateWordOffsets(
-                                            imageAnalysis.analysis.id,
-                                            word.word ?: "",
-                                            offset.x,
-                                            offset.y
-                                        )
-                                    }
-                                }
-                            }
-                    ) {
-                        WordCard(
-                            word = word,
-                            expanded = selectedWord == word.word || currentPlayingWord == word.word,
-                            isPlaying = currentPlayingWord == word.word,
-                            onExpandChange = {
-                                selectedWord = if (selectedWord == word.word) null else word.word
-                            }
+    val coordinates = word.location?.split(",")?.map { coord -> coord.trim().toFloat() } ?: listOf(0f, 0f)
+    val xPos = coordinates[0] * imageSize.width + offset.x
+    val yPos = coordinates[1] * imageSize.height + offset.y
+
+    Box(
+        modifier = Modifier
+            .offset {
+                IntOffset(
+                    x = xPos.roundToInt(),
+                    y = yPos.roundToInt()
+                )
+            }
+            .graphicsLayer {
+                scaleX = if (isTopLayer) 1.01f else 1f
+                scaleY = if (isTopLayer) 1.01f else 1f
+            }
+            .pointerInput(Unit) {
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    offset = Offset(
+                        offset.x + dragAmount.x,
+                        offset.y + dragAmount.y
+                    )
+                    scope.launch {
+                        repository.updateWordOffsets(
+                            word.id,
+                            word.word ?: "",
+                            offset.x,
+                            offset.y
                         )
                     }
                 }
             }
-        }
+    ) {
+        WordCard(
+            word = word,
+            expanded = selectedWord == word.word || 
+                      currentPlayingWord == word.word || 
+                      (word.word in playedWords),
+            isPlaying = currentPlayingWord == word.word,
+            isSelected = selectedWord == word.word,
+            onExpandChange = {
+                onSelectedWordChange(if (selectedWord == word.word) null else word.word)
+            }
+        )
     }
 }
 
@@ -326,11 +393,16 @@ private fun WordCard(
     word: WordEntity,
     expanded: Boolean,
     isPlaying: Boolean = false,
+    isSelected: Boolean = false,
     onExpandChange: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val backgroundColor by animateColorAsState(
-        targetValue = if (isPlaying) Color(0xFFFFA500) else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+        targetValue = when {
+            isPlaying -> Color(0xFFFFA500)
+            isSelected -> Color(0xFFFFA500)
+            else -> Color.Yellow//MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+        },
         animationSpec = tween(durationMillis = 300),
         label = "backgroundColor"
     )
