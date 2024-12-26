@@ -74,6 +74,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
+import android.widget.Toast
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -314,7 +315,7 @@ fun ImageWithWords(
         )
 
         if (imageSize != IntSize.Zero) {
-            // 先渲染非选中和非播放的��词
+            // 先渲染非选中和非播放的词
             imageAnalysis.words
                 .filter { it.word != currentPlayingWord && it.word != selectedWord }
                 .forEach { word ->
@@ -492,54 +493,63 @@ private fun WordCard(
 
 private fun shareScreenshot(view: View) {
     try {
+        // 确保缓存目录存在
+        val imagesDir = File(view.context.cacheDir, "images").apply { 
+            if (!exists()) mkdirs() 
+        }
+        
         // 临时禁用硬件加速
         val wasHardwareAccelerated = view.isHardwareAccelerated
         view.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
 
-        // 创建位图
-        val bitmap = Bitmap.createBitmap(
-            view.width, 
-            view.height,
-            Bitmap.Config.ARGB_8888
-        )
-        
-        // 绘制视图
-        val canvas = Canvas(bitmap)
-        view.draw(canvas)
-        
-        // 恢复硬件加速状态
-        if (wasHardwareAccelerated) {
-            view.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        }
-        
-        // 保存位图到缓存
-        val imagesDir = File(view.context.cacheDir, "images").apply { 
-            if (!exists()) mkdirs() 
-        }
-        val imageFile = File(imagesDir, "screenshot_${System.currentTimeMillis()}.png")
-        
-        FileOutputStream(imageFile).use { out ->
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-        }
+        try {
+            // 创建位图
+            val bitmap = Bitmap.createBitmap(
+                view.width, 
+                view.height,
+                Bitmap.Config.ARGB_8888
+            ).copy(Bitmap.Config.ARGB_8888, true) // Ensure it's a mutable software bitmap
+            
+            // 绘制视图
+            val canvas = Canvas(bitmap)
+            view.draw(canvas)
+            
+            // 保存位图到缓存
+            val imageFile = File(imagesDir, "screenshot_${System.currentTimeMillis()}.png")
+            
+            FileOutputStream(imageFile).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
 
-        // 获取文件 URI
-        val contentUri = FileProvider.getUriForFile(
-            view.context,
-            "${view.context.packageName}.fileprovider",
-            imageFile
-        )
+            // 获取文件 URI
+            val contentUri = FileProvider.getUriForFile(
+                view.context,
+                "${view.context.packageName}.fileprovider",
+                imageFile
+            )
 
-        // 创建分享 Intent
-        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "image/png"
-            putExtra(Intent.EXTRA_STREAM, contentUri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // 创建分享 Intent
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "image/png"
+                putExtra(Intent.EXTRA_STREAM, contentUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            // 启动分享
+            val chooserIntent = Intent.createChooser(shareIntent, "分享截图")
+            chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            view.context.startActivity(chooserIntent)
+
+        } finally {
+            // 恢复硬件加速状态
+            if (wasHardwareAccelerated) {
+                view.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            }
         }
-
-        // 启动分享
-        view.context.startActivity(Intent.createChooser(shareIntent, "分享截图"))
     } catch (e: Exception) {
         e.printStackTrace()
+        // 显示错误提示
+        Toast.makeText(view.context, "分享失败: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
     }
 }
 

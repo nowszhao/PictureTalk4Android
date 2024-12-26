@@ -142,7 +142,7 @@ fun ProfileScreen(activity: MainActivity) {
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
-                        text = "1.0.0",
+                        text = "1.0.1",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
