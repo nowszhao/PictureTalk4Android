@@ -195,7 +195,7 @@ class MainActivity : ComponentActivity() {
                         throw IOException("文件不存在")
                     }
 
-                    // 获图片尺寸
+                    // 获图���尺寸
                     val options = BitmapFactory.Options().apply {
                         inJustDecodeBounds = true
                     }
@@ -255,7 +255,7 @@ class MainActivity : ComponentActivity() {
                     repository.updateStatus(analysisId, AnalysisStatus.COMPLETED)
                     Toast.makeText(
                         this@MainActivity,
-                        "处理图片失败: ${e.message}",
+                        "处理��片失败: ${e.message}",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -392,6 +392,12 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onBackClick = {
                                         navController.navigateUp()
+                                    },
+                                    onDeleteClick = { analysis ->
+                                        lifecycleScope.launch {
+                                            repository.deleteAnalysis(analysis.analysis.id)
+                                            analysisResults.remove(analysis)
+                                        }
                                     }
                                 )
                             }

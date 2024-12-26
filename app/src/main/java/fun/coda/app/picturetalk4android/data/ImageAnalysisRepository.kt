@@ -42,4 +42,10 @@ class ImageAnalysisRepository(private val imageAnalysisDao: ImageAnalysisDao) {
             imageAnalysisDao.insertWords(words)
         }
     }
+
+    suspend fun deleteAnalysis(analysisId: Long) {
+        withContext(Dispatchers.IO) {
+            imageAnalysisDao.deleteAnalysis(analysisId)
+        }
+    }
 } 

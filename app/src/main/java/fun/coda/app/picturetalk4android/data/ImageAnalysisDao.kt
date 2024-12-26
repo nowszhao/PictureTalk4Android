@@ -37,4 +37,7 @@ interface ImageAnalysisDao {
         WHERE id = :analysisId
     """)
     suspend fun updateAnalysis(analysisId: Long, sentence: SentenceEntity, status: AnalysisStatus)
+
+    @Query("DELETE FROM image_analyses WHERE id = :analysisId")
+    suspend fun deleteAnalysis(analysisId: Long)
 } 

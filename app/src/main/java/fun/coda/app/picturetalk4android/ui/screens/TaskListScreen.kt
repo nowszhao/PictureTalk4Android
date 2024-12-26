@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -22,7 +23,8 @@ import `fun`.coda.app.picturetalk4android.data.AnalysisStatus
 fun TaskListScreen(
     analyses: List<ImageAnalysisWithWords>,
     onImageClick: (ImageAnalysisWithWords) -> Unit,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onDeleteClick: (ImageAnalysisWithWords) -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("已完成","解析中")
@@ -83,6 +85,18 @@ fun TaskListScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
                         )
+                        
+                        // 添加删除按钮
+                        IconButton(
+                            onClick = { onDeleteClick(analysis) },
+                            modifier = Modifier.align(Alignment.TopEnd)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "删除任务",
+                                tint = Color.Red
+                            )
+                        }
                         
                         // 添加解析中的进度指示器
                         if (analysis.analysis.status == AnalysisStatus.PROCESSING) {
