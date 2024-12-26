@@ -99,7 +99,77 @@ fun HomeScreen(
                     currentPlayingWord = currentPlayingWord
                 )
 
-                // 底部渐变和句子
+                // 右侧操作按钮
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = 60.dp)
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // 播放按钮
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            FloatingActionButton(
+                                onClick = {
+                                    isPlaying = !isPlaying
+                                    if (!isPlaying) {
+                                        currentPlayingWord = null
+                                    }
+                                },
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                contentColor = if (isPlaying) 
+                                    MaterialTheme.colorScheme.primary 
+                                else 
+                                    MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                    contentDescription = if (isPlaying) "停止播放" else "开始播放",
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Text(
+                                text = if (isPlaying) "停止" else "播放",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+
+                        // 任务列表按钮
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            FloatingActionButton(
+                                onClick = onTaskListClick,
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.List,
+                                    contentDescription = "任务列表",
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Text(
+                                text = "任务",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
+                }
+
+                // 底部句子展示区域
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -124,11 +194,11 @@ fun HomeScreen(
                             text = analysis.analysis.sentence.english ?: "",
                             style = MaterialTheme.typography.bodyLarge,
                             color = Color.White,
-                            maxLines = if (isExpanded) Int.MAX_VALUE else 1,
+                            maxLines = if (isExpanded) Int.MAX_VALUE else 2,
                             overflow = TextOverflow.Ellipsis
                         )
-
-                        // 展开状态显示中文翻译
+                        
+                        // 中文翻译
                         if (isExpanded) {
                             Text(
                                 text = analysis.analysis.sentence.chinese ?: "",
@@ -136,65 +206,16 @@ fun HomeScreen(
                                 color = Color.White.copy(alpha = 0.8f)
                             )
                         }
-
-                        // 展开/收起指示器
-                        Icon(
-                            imageVector = if (isExpanded)
-                                Icons.Default.KeyboardArrowUp
-                            else
-                                Icons.Default.KeyboardArrowDown,
-                            contentDescription = if (isExpanded) "收起" else "展开",
-                            tint = Color.White,
+                        
+                        // More/Less 文本
+                        Text(
+                            text = if (isExpanded) "Less" else "More",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier
-                                .size(24.dp)
-                                .align(Alignment.CenterHorizontally)
+                                .align(Alignment.End)
+                                .padding(top = 4.dp)
                         )
-                    }
-                }
-            }
-        }
-
-        // Control buttons column
-        Column(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Play/Stop button
-            FloatingActionButton(
-                onClick = { isPlaying = !isPlaying },
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "停止播放" else "开始播放",
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-
-            // Task list button with badge
-            Box {
-                FloatingActionButton(
-                    onClick = onTaskListClick,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.List,
-                        contentDescription = "任务列表",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-
-                // Badge
-                val processingCount = analyses.count { it.analysis.status == AnalysisStatus.PROCESSING }
-                if (processingCount > 0) {
-                    Badge(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .offset(x = 4.dp, y = (-4).dp)
-                    ) {
-                        Text(text = processingCount.toString())
                     }
                 }
             }
