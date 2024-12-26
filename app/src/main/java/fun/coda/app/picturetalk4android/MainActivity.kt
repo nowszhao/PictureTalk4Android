@@ -124,7 +124,7 @@ class MainActivity : ComponentActivity() {
             cropLauncher.launch(uCrop.getIntent(this))
         } catch (e: Exception) {
             Log.e("MainActivity", "启动裁剪失败", e)
-            Toast.makeText(this, "裁剪功能不可用，将直接处理原图", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "裁剪功能不可���，将直接处理原图", Toast.LENGTH_SHORT).show()
             processImage(uri)
         }
     }
@@ -195,7 +195,7 @@ class MainActivity : ComponentActivity() {
                         throw IOException("文件不存在")
                     }
 
-                    // 获图���尺寸
+                    // 获图尺寸
                     val options = BitmapFactory.Options().apply {
                         inJustDecodeBounds = true
                     }
@@ -255,7 +255,7 @@ class MainActivity : ComponentActivity() {
                     repository.updateStatus(analysisId, AnalysisStatus.COMPLETED)
                     Toast.makeText(
                         this@MainActivity,
-                        "处理��片失败: ${e.message}",
+                        "处理片失败: ${e.message}",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -397,6 +397,12 @@ class MainActivity : ComponentActivity() {
                                         lifecycleScope.launch {
                                             repository.deleteAnalysis(analysis.analysis.id)
                                             analysisResults.remove(analysis)
+                                        }
+                                    },
+                                    onDeleteAllClick = {
+                                        lifecycleScope.launch {
+                                            repository.deleteAll()
+                                            analysisResults.clear()
                                         }
                                     }
                                 )

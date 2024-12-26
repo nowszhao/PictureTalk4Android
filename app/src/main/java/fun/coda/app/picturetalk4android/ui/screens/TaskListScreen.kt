@@ -24,10 +24,13 @@ fun TaskListScreen(
     analyses: List<ImageAnalysisWithWords>,
     onImageClick: (ImageAnalysisWithWords) -> Unit,
     onBackClick: () -> Unit,
-    onDeleteClick: (ImageAnalysisWithWords) -> Unit
+    onDeleteClick: (ImageAnalysisWithWords) -> Unit,
+    onDeleteAllClick: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("已完成","解析中")
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var analysisToDelete by remember { mutableStateOf<ImageAnalysisWithWords?>(null) }
+    val tabs = listOf("已完成", "解析中")
     
     Scaffold(
         topBar = {
@@ -39,6 +42,15 @@ fun TaskListScreen(
                             Icon(
                                 imageVector = Icons.Default.ArrowBack,
                                 contentDescription = "返回首页"
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onDeleteAllClick) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "删除所有任务",
+                                tint = Color.Red
                             )
                         }
                     }
@@ -88,7 +100,10 @@ fun TaskListScreen(
                         
                         // 添加删除按钮
                         IconButton(
-                            onClick = { onDeleteClick(analysis) },
+                            onClick = {
+                                analysisToDelete = analysis
+                                showDeleteDialog = true
+                            },
                             modifier = Modifier.align(Alignment.TopEnd)
                         ) {
                             Icon(
@@ -115,6 +130,28 @@ fun TaskListScreen(
                     }
                 }
             }
+        }
+
+        // Delete confirmation dialog
+        if (showDeleteDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteDialog = false },
+                title = { Text("确认删除") },
+                text = { Text("您确定要删除这个任务吗？") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        analysisToDelete?.let { onDeleteClick(it) }
+                        showDeleteDialog = false
+                    }) {
+                        Text("删除")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteDialog = false }) {
+                        Text("取消")
+                    }
+                }
+            )
         }
     }
 }
