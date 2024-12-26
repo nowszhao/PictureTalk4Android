@@ -41,6 +41,14 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"
     }
+
+    applicationVariants.all {
+        outputs.all {
+            val outputImpl = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            val apkName = "PictureTalk-1.0.1.apk"
+            outputImpl.outputFileName = apkName
+        }
+    }
 }
 
 dependencies {
