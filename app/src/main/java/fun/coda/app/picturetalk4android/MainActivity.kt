@@ -1,5 +1,7 @@
 package `fun`.coda.app.picturetalk4android
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -30,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Modifier
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -76,6 +79,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val PREF_NAME = "kimi_config"
         private const val KEY_AUTH_TOKEN = "auth_token"
+        private const val REQUEST_CAMERA_PERMISSION = 1001
     }
 
     val analysisResults = mutableStateListOf<ImageAnalysisWithWords>()
@@ -277,6 +281,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Request camera permissions
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), REQUEST_CAMERA_PERMISSION)
+        }
         loadKimiConfig()
         
         // Initialize repository
@@ -466,6 +474,18 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             )
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_CAMERA_PERMISSION) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission granted, proceed with camera setup
+            } else {
+                // Permission denied, show a message to the user
+                Toast.makeText(this, "Camera permission is required to use this feature", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 }

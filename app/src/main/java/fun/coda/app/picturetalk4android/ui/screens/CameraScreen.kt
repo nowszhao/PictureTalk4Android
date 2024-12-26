@@ -57,7 +57,7 @@ fun CameraScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                     implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-                    scaleType = PreviewView.ScaleType.FILL_CENTER  // 修改缩放类型
+                    scaleType = PreviewView.ScaleType.FILL_CENTER
                     previewView = this
                 }
             },
@@ -116,7 +116,6 @@ fun CameraScreen(
     }
 }
 
-
 private suspend fun startCamera(
     activity: MainActivity,
     previewView: PreviewView,
@@ -128,25 +127,25 @@ private suspend fun startCamera(
         try {
             val cameraProvider = cameraProviderFuture.get()
 
-            // 设置预览
+            // Set up the preview
             val preview = Preview.Builder()
                 .setTargetRotation(previewView.display.rotation)
-                .setTargetResolution(Size(720, 1280))  // 16:9 分辨率
+                .setTargetResolution(Size(720, 1280))  // 16:9 resolution
                 .build()
                 .also {
                     it.setSurfaceProvider(previewView.surfaceProvider)
                 }
 
-            // 设置图片捕获
+            // Set up image capture
             val imageCapture = ImageCapture.Builder()
                 .setTargetRotation(previewView.display.rotation)
-                .setTargetResolution(Size(1080, 1920))  // 更高的拍照分辨率
+                .setTargetResolution(Size(1080, 1920))  // Higher resolution for photos
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                 .build()
 
             activity.imageCapture = imageCapture
 
-            // 选择后置摄像头
+            // Select back camera
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
             try {
@@ -159,11 +158,11 @@ private suspend fun startCamera(
                 )
                 continuation.resume(Unit)
             } catch (e: Exception) {
-                Log.e("MainActivity", "相机绑定失败", e)
+                Log.e("MainActivity", "Camera binding failed", e)
                 continuation.resumeWith(Result.failure(e))
             }
         } catch (e: Exception) {
-            Log.e("MainActivity", "相机启动失败", e)
+            Log.e("MainActivity", "Camera initialization failed", e)
             continuation.resumeWith(Result.failure(e))
         }
     }, ContextCompat.getMainExecutor(activity))

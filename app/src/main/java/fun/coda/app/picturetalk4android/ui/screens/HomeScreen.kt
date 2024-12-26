@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -63,6 +64,16 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Rect
+import android.view.View
+import androidx.compose.ui.platform.LocalView
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileOutputStream
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -138,6 +149,36 @@ fun HomeScreen(
                             }
                             Text(
                                 text = if (isPlaying) "停止" else "播放",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+
+                        // 分享按钮
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            val view = LocalView.current
+                            val context = LocalContext.current
+                            
+                            FloatingActionButton(
+                                onClick = {
+                                    shareScreenshot(view)
+                                },
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = "分享",
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Text(
+                                text = "分享",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
                                 modifier = Modifier.padding(top = 2.dp)
@@ -273,7 +314,7 @@ fun ImageWithWords(
         )
 
         if (imageSize != IntSize.Zero) {
-            // 先渲染非选中和非播放的单词
+            // 先渲染非选中和非播放的��词
             imageAnalysis.words
                 .filter { it.word != currentPlayingWord && it.word != selectedWord }
                 .forEach { word ->
@@ -446,6 +487,59 @@ private fun WordCard(
                 }
             }
         }
+    }
+}
+
+private fun shareScreenshot(view: View) {
+    try {
+        // 临时禁用硬件加速
+        val wasHardwareAccelerated = view.isHardwareAccelerated
+        view.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+
+        // 创建位图
+        val bitmap = Bitmap.createBitmap(
+            view.width, 
+            view.height,
+            Bitmap.Config.ARGB_8888
+        )
+        
+        // 绘制视图
+        val canvas = Canvas(bitmap)
+        view.draw(canvas)
+        
+        // 恢复硬件加速状态
+        if (wasHardwareAccelerated) {
+            view.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        }
+        
+        // 保存位图到缓存
+        val imagesDir = File(view.context.cacheDir, "images").apply { 
+            if (!exists()) mkdirs() 
+        }
+        val imageFile = File(imagesDir, "screenshot_${System.currentTimeMillis()}.png")
+        
+        FileOutputStream(imageFile).use { out ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+        }
+
+        // 获取文件 URI
+        val contentUri = FileProvider.getUriForFile(
+            view.context,
+            "${view.context.packageName}.fileprovider",
+            imageFile
+        )
+
+        // 创建分享 Intent
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(Intent.EXTRA_STREAM, contentUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        // 启动分享
+        view.context.startActivity(Intent.createChooser(shareIntent, "分享截图"))
+    } catch (e: Exception) {
+        e.printStackTrace()
     }
 }
 
