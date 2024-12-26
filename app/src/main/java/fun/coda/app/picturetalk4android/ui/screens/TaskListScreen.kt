@@ -25,7 +25,7 @@ fun TaskListScreen(
     onBackClick: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("已完成", "解析中")
+    val tabs = listOf("已完成","解析中")
     
     Scaffold(
         topBar = {
