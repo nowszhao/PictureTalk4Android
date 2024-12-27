@@ -40,37 +40,37 @@ class ShareImageGenerator(private val context: Context) {
             onProgress(0.2f)
 
             // 计算布局尺寸
-            val width = 1080 // 固定宽度
-            val imageHeight = (width * 16f / 9f).toInt() // 16:9 比例
-            val wordCardsHeight = calculateWordCardsHeight(analysis, width)
-            val sentenceHeight = calculateSentenceHeight(analysis, width)
-            val totalHeight = imageHeight + wordCardsHeight + sentenceHeight + (PADDING * 3).toInt()
-
-            // 创建最终位图
-            val resultBitmap = Bitmap.createBitmap(width, totalHeight, Bitmap.Config.ARGB_8888)
+            val width = 1440  // 增加到 1440
+            val height = (width * 16f / 9f).toInt()
+            
+            // 使用 ARGB_8888 配置创建位图
+            val resultBitmap = Bitmap.createBitmap(
+                width, 
+                height, 
+                Bitmap.Config.ARGB_8888
+            )
             val canvas = Canvas(resultBitmap)
 
-            // 绘制背景
-            canvas.drawColor(Color.WHITE)
+            // 1. 绘制背景图片
+            drawImage(canvas, originalBitmap, width, height)
             
             onProgress(0.4f)
 
-            // 绘制图片
-            drawImage(canvas, originalBitmap, width, imageHeight)
+            // 2. 绘制渐变背景(用于句子区域)
+            drawGradientBackground(canvas, width, height)
             
             onProgress(0.6f)
 
-            // 绘制单词卡片
-            var currentY = imageHeight + PADDING
-            currentY = drawWordCards(canvas, analysis, width, currentY)
+            // 3. 绘制单词卡片
+            drawWordCards(canvas, analysis, width, height)
             
             onProgress(0.8f)
 
-            // 绘制句子
-            drawSentence(canvas, analysis, width, currentY + PADDING)
+            // 4. 绘制句子
+            drawSentence(canvas, analysis, width, height)
 
-            // 添加水印
-            drawWatermark(canvas, width, totalHeight)
+            // 5. 添加水印
+            drawWatermark(canvas, width, height)
 
             onProgress(0.9f)
 
@@ -93,13 +93,48 @@ class ShareImageGenerator(private val context: Context) {
     }
 
     private fun drawImage(canvas: Canvas, bitmap: Bitmap, width: Int, height: Int) {
-        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, width, height, true)
-        canvas.drawBitmap(scaledBitmap, 0f, 0f, null)
-        scaledBitmap.recycle()
+        // 计算缩放比例，保持原始宽高比
+        val scale = Math.max(
+            width.toFloat() / bitmap.width,
+            height.toFloat() / bitmap.height
+        )
+        
+        // 计算居中位置
+        val scaledWidth = bitmap.width * scale
+        val scaledHeight = bitmap.height * scale
+        val left = (width - scaledWidth) / 2
+        val top = (height - scaledHeight) / 2
+        
+        // 创建矩阵进行变换
+        val matrix = Matrix().apply {
+            setScale(scale, scale)
+            postTranslate(left, top)
+        }
+        
+        // 使用高质量的绘制选项
+        val paint = Paint().apply {
+            isAntiAlias = true
+            isFilterBitmap = true
+            isDither = true
+        }
+        
+        canvas.drawBitmap(bitmap, matrix, paint)
     }
 
-    private fun drawWordCards(canvas: Canvas, analysis: ImageAnalysisWithWords, width: Int, startY: Float): Float {
-        var currentY = startY
+    private fun drawGradientBackground(canvas: Canvas, width: Int, height: Int) {
+        val gradientPaint = Paint().apply {
+            shader = LinearGradient(
+                0f, height * 0.7f,
+                0f, height.toFloat(),
+                intArrayOf(Color.TRANSPARENT, Color.parseColor("#B3000000")),
+                null,
+                Shader.TileMode.CLAMP
+            )
+        }
+        canvas.drawRect(0f, height * 0.7f, width.toFloat(), height.toFloat(), gradientPaint)
+    }
+
+    private fun drawWordCards(canvas: Canvas, analysis: ImageAnalysisWithWords, width: Int, height: Int) {
         val paint = Paint().apply {
             isAntiAlias = true
             textSize = 40f
@@ -107,17 +142,23 @@ class ShareImageGenerator(private val context: Context) {
 
         val cardPaint = Paint().apply {
             isAntiAlias = true
-            color = Color.WHITE
+            color = Color.YELLOW
+            alpha = 230 // 设置透明度
             setShadowLayer(4f, 0f, 2f, Color.parseColor("#20000000"))
         }
 
         analysis.words.forEach { word ->
+            val coordinates = word.location?.split(",")?.map { it.trim().toFloat() } ?: listOf(0f, 0f)
+            val xPos = coordinates[0] * width + (word.offset_x ?: 0f)
+            val yPos = coordinates[1] * height + (word.offset_y ?: 0f)
+
+            val cardWidth = 300f
             val cardHeight = 160f
             val rect = RectF(
-                PADDING,
-                currentY,
-                width - PADDING,
-                currentY + cardHeight
+                xPos - cardWidth/2,
+                yPos - cardHeight/2,
+                xPos + cardWidth/2,
+                yPos + cardHeight/2
             )
 
             // 绘制卡片背景
@@ -131,8 +172,8 @@ class ShareImageGenerator(private val context: Context) {
             }
             canvas.drawText(
                 word.word ?: "",
-                PADDING + WORD_CARD_PADDING,
-                currentY + 50f,
+                rect.left + WORD_CARD_PADDING,
+                rect.top + 50f,
                 paint
             )
 
@@ -144,8 +185,8 @@ class ShareImageGenerator(private val context: Context) {
             }
             canvas.drawText(
                 word.phoneticsymbols ?: "",
-                PADDING + WORD_CARD_PADDING,
-                currentY + 90f,
+                rect.left + WORD_CARD_PADDING,
+                rect.top + 90f,
                 paint
             )
 
@@ -156,60 +197,57 @@ class ShareImageGenerator(private val context: Context) {
             }
             canvas.drawText(
                 word.explanation ?: "",
-                PADDING + WORD_CARD_PADDING,
-                currentY + 130f,
+                rect.left + WORD_CARD_PADDING,
+                rect.top + 130f,
                 paint
             )
-
-            currentY += cardHeight + PADDING
         }
-
-        return currentY
     }
 
-    private fun drawSentence(canvas: Canvas, analysis: ImageAnalysisWithWords, width: Int, startY: Float) {
+    private fun drawSentence(canvas: Canvas, analysis: ImageAnalysisWithWords, width: Int, height: Int) {
         val paint = TextPaint().apply {
             isAntiAlias = true
-            textSize = 40f
-            color = Color.BLACK
+            color = Color.WHITE
         }
 
         // 英文句子
+        paint.textSize = 40f
         val englishText = analysis.analysis.sentence.english ?: ""
-        val englishLayout = StaticLayout(
+        val englishLayout = StaticLayout.Builder.obtain(
             englishText,
+            0,
+            englishText.length,
             paint,
-            (width - (PADDING * 2)).toInt(),
-            Layout.Alignment.ALIGN_NORMAL,
-            1.0f,
-            0f,
-            false
+            (width - (PADDING * 2)).toInt()
         )
+            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+            .setLineSpacing(0f, 1f)
+            .setIncludePad(false)
+            .build()
         
         canvas.save()
-        canvas.translate(PADDING, startY)
+        canvas.translate(PADDING, height - englishLayout.height - 150f)
         englishLayout.draw(canvas)
         canvas.restore()
 
         // 中文翻译
-        paint.apply {
-            textSize = 36f
-            color = Color.GRAY
-        }
-        
+        paint.textSize = 36f
+        paint.alpha = 204 // 80% opacity
         val chineseText = analysis.analysis.sentence.chinese ?: ""
-        val chineseLayout = StaticLayout(
+        val chineseLayout = StaticLayout.Builder.obtain(
             chineseText,
+            0,
+            chineseText.length,
             paint,
-            (width - (PADDING * 2)).toInt(),
-            Layout.Alignment.ALIGN_NORMAL,
-            1.0f,
-            0f,
-            false
+            (width - (PADDING * 2)).toInt()
         )
+            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+            .setLineSpacing(0f, 1f)
+            .setIncludePad(false)
+            .build()
 
         canvas.save()
-        canvas.translate(PADDING, startY + englishLayout.height + TEXT_PADDING)
+        canvas.translate(PADDING, height - chineseLayout.height - 80f)
         chineseLayout.draw(canvas)
         canvas.restore()
     }
@@ -218,7 +256,8 @@ class ShareImageGenerator(private val context: Context) {
         val paint = Paint().apply {
             isAntiAlias = true
             textSize = 32f
-            color = Color.parseColor("#80000000")
+            color = Color.WHITE
+            alpha = 128
             typeface = Typeface.DEFAULT_BOLD
         }
         
@@ -229,38 +268,5 @@ class ShareImageGenerator(private val context: Context) {
             height - PADDING,
             paint
         )
-    }
-
-    private fun calculateWordCardsHeight(analysis: ImageAnalysisWithWords, width: Int): Int {
-        return ((160f + PADDING) * analysis.words.size).toInt()
-    }
-
-    private fun calculateSentenceHeight(analysis: ImageAnalysisWithWords, width: Int): Int {
-        val paint = TextPaint().apply {
-            textSize = 40f
-        }
-
-        val englishLayout = StaticLayout(
-            analysis.analysis.sentence.english ?: "",
-            paint,
-            (width - (PADDING * 2)).toInt(),
-            Layout.Alignment.ALIGN_NORMAL,
-            1.0f,
-            0f,
-            false
-        )
-
-        paint.textSize = 36f
-        val chineseLayout = StaticLayout(
-            analysis.analysis.sentence.chinese ?: "",
-            paint,
-            (width - (PADDING * 2)).toInt(),
-            Layout.Alignment.ALIGN_NORMAL,
-            1.0f,
-            0f,
-            false
-        )
-
-        return englishLayout.height + chineseLayout.height + (TEXT_PADDING * 2).toInt()
     }
 } 

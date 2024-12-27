@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/homeScreen">
+
+    <fragment
+        android:id="@+id/homeScreen"
+        android:name="fun.coda.app.picturetalk4android.ui.screens.HomeScreen"
+        android:label="Home" />
+
+    <fragment
+        android:id="@+id/cameraScreen"
+        android:name="fun.coda.app.picturetalk4android.ui.screens.CameraScreen"
+        android:label="Camera" />
+
+    <fragment
+        android:id="@+id/profileScreen"
+        android:name="fun.coda.app.picturetalk4android.ui.screens.ProfileScreen"
+        android:label="Profile" />
+
+    <fragment
+        android:id="@+id/taskListScreen"
+        android:name="fun.coda.app.picturetalk4android.ui.screens.TaskListScreen"
+        android:label="Task List" />
+</navigation> 
