@@ -257,8 +257,8 @@ fun HomeScreen(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier
-                                .align(Alignment.End)
-                                .padding(top = 4.dp)
+                                .align(Alignment.Start)
+                                .padding(top = 2.dp)
                         )
                     }
                 }
