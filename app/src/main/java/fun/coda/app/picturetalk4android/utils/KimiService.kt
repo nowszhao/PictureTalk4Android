@@ -65,7 +65,7 @@ class KimiService {
     }
 
     suspend fun createChat(): String {
-        Log.d(TAG, "开始创建聊天会话")
+        Log.d(TAG, "开始创建��天会话")
         val request = Request.Builder()
             .url("$BASE_URL/chat")
             .post("""
@@ -98,7 +98,8 @@ class KimiService {
         fileName: String,
         fileSize: Int,
         fileDetail: FileDetailResponse,
-        chatId: String
+        chatId: String,
+        englishLevel: EnglishLevel
     ): AnalysisResponse {
         Log.d(TAG, "开始分析图片: fileId=$fileId, fileName=$fileName, fileSize=$fileSize, chatId=$chatId")
 
@@ -120,9 +121,9 @@ class KimiService {
         )
 
         val prompt = """
-        我作为一个英语学习者，我想通过图片场景化学习新的英语词块，请分析我提供的图片，提供一下信息：
+        我作为一个英语水平为${englishLevel.title}的学习者，我想通过图片场景化学习新的英语词块，请分析我提供的图片，提供以下信息：
         1、词块：
-          - 图片场景中我可以学习到相对我英语水平之上的 Top8英语词块，信息包括词块、音标和中文解释、词块所在图片大致位置（词块指向物品中的一个点表示，x 和 y 坐标，归一化到0~1的范围，精度为后四位小数点，词块之间的位置不要重叠）
+          - 图片场景中我可以学习到相对${englishLevel.title}水平之上的 Top8英语词块，信息包括词块、音标和中文解释、词块所在图片大致位置（词块指向物品中的一个点表示，x 和 y 坐标，归一化到0~1的范围，精度为后四位小数点，词块之间的位置不要重叠）
           - 英语词块（chunk）是指在语言处理中，作为一个整体来理解和使用的一组词或短语。词块可以是固定搭配、习惯用语、短语动词、常见的表达方式等。它们在语言中频繁出现，具有一定的固定性和连贯性，使得学习者能够更自然地使用语言。
         2、句子
           - 使用一句最简单、准确的英语描述图片内容。

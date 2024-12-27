@@ -1,6 +1,5 @@
 package `fun`.coda.app.picturetalk4android.ui.screens
 
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +22,7 @@ import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -46,13 +46,16 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import `fun`.coda.app.picturetalk4android.MainActivity
+import `fun`.coda.app.picturetalk4android.data.EnglishLevel
 
 @Composable
 fun ProfileScreen(activity: MainActivity) {
     var showDialog by remember { mutableStateOf(false) }
+    var showEnglishLevelDialog by remember { mutableStateOf(false) }
     var authToken by remember { mutableStateOf(activity.getKimiToken() ?: "") }
     var showToken by remember { mutableStateOf(false) }
     var isExpanded by remember { mutableStateOf(false) }
+    var currentLevel by remember { mutableStateOf(activity.getEnglishLevel()) }
 
     Box(
         modifier = Modifier
@@ -99,6 +102,47 @@ fun ProfileScreen(activity: MainActivity) {
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                // 英语水平设置
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showEnglishLevelDialog = true }
+                        .padding(vertical = 4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.School,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary
+                                )
+                                Text(
+                                    text = "英语水平",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
+                            Text(
+                                text = currentLevel.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+                }
+
                 // KIMI 配置项
                 Card(
                     modifier = Modifier
@@ -245,6 +289,56 @@ fun ProfileScreen(activity: MainActivity) {
                     )
                 }
             }
+        }
+
+        // 英语水平选择对话框
+        if (showEnglishLevelDialog) {
+            AlertDialog(
+                onDismissRequest = { showEnglishLevelDialog = false },
+                title = { Text("选择英语水平") },
+                text = {
+                    Column {
+                        EnglishLevel.values().forEach { level ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        currentLevel = level
+                                        activity.saveEnglishLevel(level)
+                                        showEnglishLevelDialog = false
+                                    }
+                                    .padding(vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = level.title,
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Text(
+                                        text = level.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (level == currentLevel) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showEnglishLevelDialog = false }) {
+                        Text("关闭")
+                    }
+                }
+            )
         }
 
         // KIMI Token 配置对话框

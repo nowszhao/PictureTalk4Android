@@ -183,3 +183,17 @@ class Converters {
         return Date(value)
     }
 }
+
+// 添加英语等级枚举
+enum class EnglishLevel(val title: String, val description: String) {
+    JUNIOR_HIGH("初中", "适合初中英语水平的学习者"),
+    SENIOR_HIGH("高中", "适合高中英语水平的学习者"),
+    CET4("大学四级", "适合大学英语四级水平的学习者"),
+    CET6("大学六级", "适合大学英语六级水平的学习者"),
+    IELTS("雅思/托福", "适合准备雅思或托福考试的学习者"),
+    ADVANCED("专业/GRE", "适合英语专业或准备GRE考试的学习者");
+
+    companion object {
+        fun getDefault() = SENIOR_HIGH
+    }
+}

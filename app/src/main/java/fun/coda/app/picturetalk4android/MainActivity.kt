@@ -65,6 +65,7 @@ import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import androidx.compose.runtime.collectAsState
+import `fun`.coda.app.picturetalk4android.data.EnglishLevel
 
 
 enum class Screen(val title: String) {
@@ -82,6 +83,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val PREF_NAME = "kimi_config"
         private const val KEY_AUTH_TOKEN = "auth_token"
+        private const val KEY_ENGLISH_LEVEL = "english_level"
         private const val REQUEST_CAMERA_PERMISSION = 1001
     }
 
@@ -195,7 +197,7 @@ class MainActivity : ComponentActivity() {
 
                     if (filePath == null) {
                         Log.e("MainActivity", "无法获取文件路径")
-                        throw IOException("无法获取文件路径")
+                        throw IOException("无��获取文件路径")
                     }
 
                     val file = File(filePath)
@@ -228,13 +230,14 @@ class MainActivity : ComponentActivity() {
                         height = options.outHeight.toString()
                     )
 
-                    // 分析图片
+                    // 分���图片
                     val analysisResponse = kimiService.analyzeImage(
                         fileId = preSignedURL.file_id,
                         fileName = file.name,
                         fileSize = file.length().toInt(),
                         fileDetail = fileDetail,
-                        chatId = chatId
+                        chatId = chatId,
+                        englishLevel = getEnglishLevel()
                     )
 
                     Log.d("MainActivity", "分析结果: $analysisResponse")
@@ -544,6 +547,25 @@ class MainActivity : ComponentActivity() {
     // 添加设置选中图片的方法
     fun setSelectedImage(id: Long?) {
         _selectedImageId.value = id
+    }
+
+    // 添加英语等级相关方法
+    fun saveEnglishLevel(level: EnglishLevel) {
+        getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit().apply {
+            putString(KEY_ENGLISH_LEVEL, level.name)
+            apply()
+        }
+    }
+
+    fun getEnglishLevel(): EnglishLevel {
+        val prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+        val levelName = prefs.getString(KEY_ENGLISH_LEVEL, null)
+        return try {
+            if (levelName != null) EnglishLevel.valueOf(levelName)
+            else EnglishLevel.getDefault()
+        } catch (e: IllegalArgumentException) {
+            EnglishLevel.getDefault()
+        }
     }
 }
 
