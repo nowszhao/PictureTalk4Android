@@ -65,6 +65,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -76,9 +77,14 @@ import java.io.File
 import java.io.FileOutputStream
 import android.widget.Toast
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import `fun`.coda.app.picturetalk4android.Screen
 import androidx.compose.ui.zIndex
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import `fun`.coda.app.picturetalk4android.utils.ShareImageGenerator
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -117,6 +123,10 @@ fun HomeScreen(
 
     // 计算处理中的任务数量
     val processingCount = analyses.count { it.analysis.status == AnalysisStatus.PROCESSING }
+
+    // 添加一个状态来控制分享对话框的显示
+    var showShareDialog by remember { mutableStateOf(false) }
+    var currentAnalysis by remember { mutableStateOf<ImageAnalysisWithWords?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (analyses.isEmpty()) {
@@ -352,12 +362,10 @@ fun HomeScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                val view = LocalView.current
-                                val context = LocalContext.current
-                                
                                 FloatingActionButton(
                                     onClick = {
-                                        shareScreenshot(view)
+                                        showShareDialog = true
+                                        currentAnalysis = analysis
                                     },
                                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
                                     contentColor = MaterialTheme.colorScheme.onSurface,
@@ -440,6 +448,14 @@ fun HomeScreen(
                     isPlaying = false
                 }
             }
+        }
+
+        // 在需要显示时才渲染分享对话框
+        if (showShareDialog && currentAnalysis != null) {
+            ShareDialog(
+                analysis = currentAnalysis!!,
+                onDismiss = { showShareDialog = false }
+            )
         }
     }
 }
@@ -649,65 +665,74 @@ private fun WordCard(
     }
 }
 
-private fun shareScreenshot(view: View) {
-    try {
-        // 确保缓存目录存在
-        val imagesDir = File(view.context.cacheDir, "images").apply { 
-            if (!exists()) mkdirs() 
-        }
-        
-        // 临时禁用硬件加速
-        val wasHardwareAccelerated = view.isHardwareAccelerated
-        view.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+@Composable
+private fun ShareDialog(
+    analysis: ImageAnalysisWithWords,
+    onDismiss: () -> Unit
+) {
+    var showProgress by remember { mutableStateOf(true) }
+    var progress by remember { mutableStateOf(0f) }
+    val context = LocalContext.current
+    
+    if (showProgress) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("正在生成分享图片") },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(
+                        progress = progress,
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
+            },
+            confirmButton = { }
+        )
+    }
 
-        try {
-            // 创建位图
-            val bitmap = Bitmap.createBitmap(
-                view.width, 
-                view.height,
-                Bitmap.Config.ARGB_8888
-            ).copy(Bitmap.Config.ARGB_8888, true) // Ensure it's a mutable software bitmap
-            
-            // 绘制视图
-            val canvas = Canvas(bitmap)
-            view.draw(canvas)
-            
-            // 保存位图到缓存
-            val imageFile = File(imagesDir, "screenshot_${System.currentTimeMillis()}.png")
-            
-            FileOutputStream(imageFile).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-            }
+    LaunchedEffect(analysis) {
+        withContext(Dispatchers.IO) {
+            val generator = ShareImageGenerator(context)
+            generator.generateShareImage(
+                analysis = analysis,
+                onProgress = { progress = it },
+                onComplete = { file ->
+                    showProgress = false
+                    onDismiss()
+                    
+                    // 获取文件 URI
+                    val contentUri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file
+                    )
 
-            // 获取文件 URI
-            val contentUri = FileProvider.getUriForFile(
-                view.context,
-                "${view.context.packageName}.fileprovider",
-                imageFile
+                    // 创建分享 Intent
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "image/png"
+                        putExtra(Intent.EXTRA_STREAM, contentUri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+
+                    // 启动分享
+                    val chooserIntent = Intent.createChooser(shareIntent, "分享学习卡片")
+                    chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(chooserIntent)
+                },
+                onError = { e ->
+                    showProgress = false
+                    onDismiss()
+                    Toast.makeText(
+                        context,
+                        "生成分享图片失败: ${e.localizedMessage}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
             )
-
-            // 创建分享 Intent
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "image/png"
-                putExtra(Intent.EXTRA_STREAM, contentUri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-
-            // 启动分享
-            val chooserIntent = Intent.createChooser(shareIntent, "分享截图")
-            chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            view.context.startActivity(chooserIntent)
-
-        } finally {
-            // 恢复硬件加速状态
-            if (wasHardwareAccelerated) {
-                view.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-            }
         }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        // 显示错误提示
-        Toast.makeText(view.context, "分享失败: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
     }
 }
 
