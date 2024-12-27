@@ -158,6 +158,9 @@ class MainActivity : ComponentActivity() {
         return !prefs.getString(KEY_AUTH_TOKEN, null).isNullOrBlank()
     }
 
+    // 添加一个可空的导航回调
+    private var navigateToHome: (() -> Unit)? = null
+
     // 修改 processImage 方法
     internal fun processImage(uri: Uri) {
         if (!isKimiConfigured()) {
@@ -176,6 +179,9 @@ class MainActivity : ComponentActivity() {
                     status = AnalysisStatus.PROCESSING
                 )
                 val analysisId = repository.insert(initialAnalysis)  // 保存初始记录并获取ID
+
+                // 使用导航回调
+                navigateToHome?.invoke()
 
                 try {
                     // 获取文件路径
@@ -258,7 +264,7 @@ class MainActivity : ComponentActivity() {
                     repository.updateStatus(analysisId, AnalysisStatus.COMPLETED)
                     Toast.makeText(
                         this@MainActivity,
-                        "处理片失败: ${e.message}",
+                        "处理图片失败: ${e.message}",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -310,7 +316,18 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val navController = rememberNavController()
                     
-                    // 修改这���分代码
+                    // 设置导航回调
+                    LaunchedEffect(navController) {
+                        navigateToHome = {
+                            navController.navigate(Screen.Home.name) {
+                                popUpTo(Screen.Home.name) {
+                                    inclusive = true
+                                }
+                            }
+                        }
+                    }
+
+                    // 修改这部分代码
                     LaunchedEffect(Unit) {
                         if (!isKimiConfigured()) {
                             // 等待导航图设置完成后再导航

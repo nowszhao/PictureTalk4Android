@@ -115,6 +115,9 @@ fun HomeScreen(
         }
     }
 
+    // 计算处理中的任务数量
+    val processingCount = analyses.count { it.analysis.status == AnalysisStatus.PROCESSING }
+
     Box(modifier = Modifier.fillMaxSize()) {
         if (analyses.isEmpty()) {
             // Empty state
@@ -379,17 +382,33 @@ fun HomeScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                FloatingActionButton(
-                                    onClick = onTaskListClick,
-                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                                    contentColor = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.List,
-                                        contentDescription = "任务列表",
-                                        modifier = Modifier.size(24.dp)
-                                    )
+                                Box {
+                                    FloatingActionButton(
+                                        onClick = onTaskListClick,
+                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                        contentColor = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(48.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.List,
+                                            contentDescription = "任务列表",
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    
+                                    // 添加角标
+                                    if (processingCount > 0) {
+                                        Badge(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .offset(x = 4.dp, y = (-4).dp)
+                                        ) {
+                                            Text(
+                                                text = processingCount.toString(),
+                                                style = MaterialTheme.typography.labelSmall
+                                            )
+                                        }
+                                    }
                                 }
                                 Text(
                                     text = "任务",
