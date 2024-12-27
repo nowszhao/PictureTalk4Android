@@ -124,7 +124,7 @@ class MainActivity : ComponentActivity() {
             cropLauncher.launch(uCrop.getIntent(this))
         } catch (e: Exception) {
             Log.e("MainActivity", "启动裁剪失败", e)
-            Toast.makeText(this, "裁剪功能不可���，将直接处理原图", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "裁剪功能不可用，将直接处理原图", Toast.LENGTH_SHORT).show()
             processImage(uri)
         }
     }
@@ -499,6 +499,19 @@ class MainActivity : ComponentActivity() {
                 Toast.makeText(this, "Camera permission is required to use this feature", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    internal fun getKimiToken(): String? {
+        return getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+            .getString(KEY_AUTH_TOKEN, null)
+    }
+
+    internal fun clearKimiConfig() {
+        getSharedPreferences(PREF_NAME, MODE_PRIVATE).edit().apply {
+            remove(KEY_AUTH_TOKEN)
+            apply()
+        }
+        KimiService.configure(null, null)
     }
 }
 
