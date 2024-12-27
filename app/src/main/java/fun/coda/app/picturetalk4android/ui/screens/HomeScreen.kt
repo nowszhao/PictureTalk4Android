@@ -75,6 +75,9 @@ import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
 import android.widget.Toast
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material3.FilledTonalButton
+import `fun`.coda.app.picturetalk4android.Screen
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -94,193 +97,246 @@ fun HomeScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        VerticalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize()
-        ) { page ->
-            val analysis = analyses[page]
-            var isExpanded by remember { mutableStateOf(false) }
-
-            Box(
+        if (analyses.isEmpty()) {
+            // Empty state
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black)
+                    .padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                // 图片和单词
-                ImageWithWords(
-                    imageAnalysis = analysis,
-                    modifier = Modifier.fillMaxSize(),
-                    currentPlayingWord = currentPlayingWord
+                Icon(
+                    imageVector = Icons.Default.PhotoCamera,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(120.dp)
+                        .padding(bottom = 24.dp),
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
                 )
+                
+                Text(
+                    text = "还没有任何图片",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
+                Text(
+                    text = "快去拍照学习吧！",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 32.dp)
+                )
+                
+                FilledTonalButton(
+                    onClick = {
+                        // 导航到相机页面
+                        Screen.bottomNavItems().find { it == Screen.Camera }?.let { screen ->
+                            // 使用已有的底部导航栏点击事件
+                            // 这里不需要额外的代码，因为用户可以直接点击底部导航栏
+                        }
+                    },
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PhotoCamera,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    Text("去拍照")
+                }
+            }
+        } else {
+            // 原有的 VerticalPager 内容
+            VerticalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val analysis = analyses[page]
+                var isExpanded by remember { mutableStateOf(false) }
 
-                // 右侧操作按钮
                 Box(
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 16.dp, bottom = 60.dp)
+                        .fillMaxSize()
+                        .background(Color.Black)
                 ) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    // 图片和单词
+                    ImageWithWords(
+                        imageAnalysis = analysis,
+                        modifier = Modifier.fillMaxSize(),
+                        currentPlayingWord = currentPlayingWord
+                    )
+
+                    // 右侧操作按钮
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 16.dp, bottom = 60.dp)
                     ) {
-                        // 播放按钮
                         Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            verticalArrangement = Arrangement.spacedBy(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            FloatingActionButton(
-                                onClick = {
-                                    isPlaying = !isPlaying
-                                    if (!isPlaying) {
-                                        currentPlayingWord = null
-                                    }
-                                },
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                                contentColor = if (isPlaying) 
-                                    MaterialTheme.colorScheme.primary 
-                                else 
-                                    MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(48.dp)
+                            // 播放按钮
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                                    contentDescription = if (isPlaying) "停止播放" else "开始播放",
-                                    modifier = Modifier.size(24.dp)
+                                FloatingActionButton(
+                                    onClick = {
+                                        isPlaying = !isPlaying
+                                        if (!isPlaying) {
+                                            currentPlayingWord = null
+                                        }
+                                    },
+                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                    contentColor = if (isPlaying) 
+                                        MaterialTheme.colorScheme.primary 
+                                    else 
+                                        MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
+                                        contentDescription = if (isPlaying) "停止播放" else "开始播放",
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Text(
+                                    text = if (isPlaying) "停止" else "播放",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(top = 2.dp)
                                 )
                             }
-                            Text(
-                                text = if (isPlaying) "停止" else "播放",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
 
-                        // 分享按钮
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            val view = LocalView.current
-                            val context = LocalContext.current
-                            
-                            FloatingActionButton(
-                                onClick = {
-                                    shareScreenshot(view)
-                                },
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                                contentColor = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(48.dp)
+                            // 分享按钮
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Share,
-                                    contentDescription = "分享",
-                                    modifier = Modifier.size(24.dp)
+                                val view = LocalView.current
+                                val context = LocalContext.current
+                                
+                                FloatingActionButton(
+                                    onClick = {
+                                        shareScreenshot(view)
+                                    },
+                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                    contentColor = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Share,
+                                        contentDescription = "分享",
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "分享",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(top = 2.dp)
                                 )
                             }
-                            Text(
-                                text = "分享",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
 
-                        // 任务列表按钮
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            FloatingActionButton(
-                                onClick = onTaskListClick,
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                                contentColor = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(48.dp)
+                            // 任务列表按钮
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.List,
-                                    contentDescription = "任务列表",
-                                    modifier = Modifier.size(24.dp)
+                                FloatingActionButton(
+                                    onClick = onTaskListClick,
+                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                    contentColor = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.List,
+                                        contentDescription = "任务列表",
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "任务",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(top = 2.dp)
                                 )
                             }
-                            Text(
-                                text = "任务",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
                         }
                     }
-                }
 
-                // 底部句子展示区域
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.7f)
+                    // 底部句子展示区域
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.7f)
+                                    )
                                 )
                             )
-                        )
-                        .clickable { isExpanded = !isExpanded }
-                        .padding(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .clickable { isExpanded = !isExpanded }
+                            .padding(16.dp)
                     ) {
-                        // 英文句子
-                        Text(
-                            text = analysis.analysis.sentence.english ?: "",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.White,
-                            maxLines = if (isExpanded) Int.MAX_VALUE else 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        
-                        // 中文翻译
-                        if (isExpanded) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // 英文句子
                             Text(
-                                text = analysis.analysis.sentence.chinese ?: "",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White.copy(alpha = 0.8f)
+                                text = analysis.analysis.sentence.english ?: "",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color.White,
+                                maxLines = if (isExpanded) Int.MAX_VALUE else 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            
+                            // 中文翻译
+                            if (isExpanded) {
+                                Text(
+                                    text = analysis.analysis.sentence.chinese ?: "",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.8f)
+                                )
+                            }
+                            
+                            // More/Less 文本
+                            Text(
+                                text = if (isExpanded) "Less" else "More",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .align(Alignment.Start)
+                                    .padding(top = 2.dp)
                             )
                         }
-                        
-                        // More/Less 文本
-                        Text(
-                            text = if (isExpanded) "Less" else "More",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .align(Alignment.Start)
-                                .padding(top = 2.dp)
-                        )
                     }
                 }
             }
-        }
 
-        // Auto-play logic
-        LaunchedEffect(isPlaying, pagerState.currentPage) {
-            if (isPlaying && analyses.isNotEmpty()) {
-                val currentAnalysis = analyses[pagerState.currentPage]
-                val words = currentAnalysis.words
-                
-                for (word in words) {
-                    if (!isPlaying) break // Stop if playing is cancelled
-                    currentPlayingWord = word.word
-                    word.word?.let { AudioService.playWordAudio(it) }
-                    delay(2000) // Wait for 2 seconds before next word
+            // Auto-play logic
+            LaunchedEffect(isPlaying, pagerState.currentPage) {
+                if (isPlaying && analyses.isNotEmpty()) {
+                    val currentAnalysis = analyses[pagerState.currentPage]
+                    val words = currentAnalysis.words
+                    
+                    for (word in words) {
+                        if (!isPlaying) break // Stop if playing is cancelled
+                        currentPlayingWord = word.word
+                        word.word?.let { AudioService.playWordAudio(it) }
+                        delay(2000) // Wait for 2 seconds before next word
+                    }
+                    
+                    // Reset after playing all words
+                    currentPlayingWord = null
+                    isPlaying = false
                 }
-                
-                // Reset after playing all words
-                currentPlayingWord = null
-                isPlaying = false
             }
         }
     }
