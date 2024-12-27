@@ -212,10 +212,6 @@ class MainActivity : ComponentActivity() {
                     }
                     BitmapFactory.decodeFile(filePath, options)
 
-                    // 创建聊天会话
-                    val chatId = kimiService.createChat()
-                    Log.d("MainActivity", "创建聊天会话成功: $chatId")
-
                     // 获取预签名 URL
                     val preSignedURL = kimiService.getPreSignedURL(file.name)
 
@@ -230,13 +226,12 @@ class MainActivity : ComponentActivity() {
                         height = options.outHeight.toString()
                     )
 
-                    // 分���图片
+                    // 分析图片
                     val analysisResponse = kimiService.analyzeImage(
                         fileId = preSignedURL.file_id,
                         fileName = file.name,
                         fileSize = file.length().toInt(),
                         fileDetail = fileDetail,
-                        chatId = chatId,
                         englishLevel = getEnglishLevel()
                     )
 
