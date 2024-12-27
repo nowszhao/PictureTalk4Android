@@ -78,6 +78,7 @@ import android.widget.Toast
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.FilledTonalButton
 import `fun`.coda.app.picturetalk4android.Screen
+import androidx.compose.ui.zIndex
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -89,6 +90,13 @@ fun HomeScreen(
     val pagerState = rememberPagerState(pageCount = { analyses.size })
     var isPlaying by remember { mutableStateOf(false) }
     var currentPlayingWord by remember { mutableStateOf<String?>(null) }
+    var imageSize by remember { mutableStateOf(IntSize.Zero) }
+    var selectedWord by remember { mutableStateOf<String?>(null) }
+    var playedWords by remember { mutableStateOf(setOf<String>()) }
+    val context = LocalContext.current
+    val repository = remember {
+        ImageAnalysisRepository(AppDatabase.getDatabase(context).imageAnalysisDao())
+    }
     
     // Reset playing state when page changes
     LaunchedEffect(pagerState.currentPage) {
@@ -123,7 +131,7 @@ fun HomeScreen(
                 )
                 
                 Text(
-                    text = "快去拍照学习吧！",
+                    text = "快去拍照学吧！",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 32.dp)
@@ -161,24 +169,138 @@ fun HomeScreen(
                         .fillMaxSize()
                         .background(Color.Black)
                 ) {
-                    // 图片和单词
-                    ImageWithWords(
-                        imageAnalysis = analysis,
-                        modifier = Modifier.fillMaxSize(),
-                        currentPlayingWord = currentPlayingWord
+                    // 1. 底层：图片
+                    AsyncImage(
+                        model = Uri.parse(analysis.analysis.imageUri),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .onGloballyPositioned { coordinates ->
+                                imageSize = coordinates.size
+                            },
+                        contentScale = ContentScale.Crop
                     )
 
-                    // 右侧操作按钮
+                    // 2. 中层：句子区域
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.7f)
+                                    )
+                                )
+                            )
+                            .clickable { isExpanded = !isExpanded }
+                            .padding(16.dp)
+                            .zIndex(1f)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // 英文句子
+                            Text(
+                                text = analysis.analysis.sentence.english ?: "",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Color.White,
+                                maxLines = if (isExpanded) Int.MAX_VALUE else 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            
+                            // 中文翻译
+                            if (isExpanded) {
+                                Text(
+                                    text = analysis.analysis.sentence.chinese ?: "",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.8f)
+                                )
+                            }
+                            
+                            // More/Less 文本
+                            Text(
+                                text = if (isExpanded) "Less" else "More",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .align(Alignment.Start)
+                                    .padding(top = 2.dp)
+                            )
+                        }
+                    }
+
+                    // 3. 上层：单词卡片
+                    if (imageSize != IntSize.Zero) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .zIndex(2f)
+                        ) {
+                            // 先渲染非选中和非播放的词
+                            analysis.words
+                                .filter { it.word != currentPlayingWord && it.word != selectedWord }
+                                .forEach { word ->
+                                    RenderWordCard(
+                                        word = word,
+                                        imageSize = imageSize,
+                                        currentPlayingWord = currentPlayingWord,
+                                        selectedWord = selectedWord,
+                                        playedWords = playedWords,
+                                        onSelectedWordChange = { selectedWord = it },
+                                        repository = repository,
+                                        isTopLayer = false
+                                    )
+                                }
+                            
+                            // 渲染选中的单词（如果有）
+                            selectedWord?.let { selected ->
+                                analysis.words.find { it.word == selected }?.let { word ->
+                                    RenderWordCard(
+                                        word = word,
+                                        imageSize = imageSize,
+                                        currentPlayingWord = currentPlayingWord,
+                                        selectedWord = selectedWord,
+                                        playedWords = playedWords,
+                                        onSelectedWordChange = { selectedWord = it },
+                                        repository = repository,
+                                        isTopLayer = true
+                                    )
+                                }
+                            }
+                            
+                            // 最后渲染当前播放的单词（如果有）
+                            currentPlayingWord?.let { playing ->
+                                analysis.words.find { it.word == playing }?.let { word ->
+                                    RenderWordCard(
+                                        word = word,
+                                        imageSize = imageSize,
+                                        currentPlayingWord = currentPlayingWord,
+                                        selectedWord = selectedWord,
+                                        playedWords = playedWords,
+                                        onSelectedWordChange = { selectedWord = it },
+                                        repository = repository,
+                                        isTopLayer = true
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 4. 最上层：操作按钮组
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(end = 16.dp, bottom = 60.dp)
+                            .zIndex(3f)
                     ) {
                         Column(
                             verticalArrangement = Arrangement.spacedBy(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            // 播放按钮
+                            // 播放按钮组
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -265,56 +387,6 @@ fun HomeScreen(
                                     modifier = Modifier.padding(top = 2.dp)
                                 )
                             }
-                        }
-                    }
-
-                    // 底部句子展示区域
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color.Black.copy(alpha = 0.7f)
-                                    )
-                                )
-                            )
-                            .clickable { isExpanded = !isExpanded }
-                            .padding(16.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // 英文句子
-                            Text(
-                                text = analysis.analysis.sentence.english ?: "",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = Color.White,
-                                maxLines = if (isExpanded) Int.MAX_VALUE else 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            
-                            // 中文翻译
-                            if (isExpanded) {
-                                Text(
-                                    text = analysis.analysis.sentence.chinese ?: "",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color.White.copy(alpha = 0.8f)
-                                )
-                            }
-                            
-                            // More/Less 文本
-                            Text(
-                                text = if (isExpanded) "Less" else "More",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .align(Alignment.Start)
-                                    .padding(top = 2.dp)
-                            )
                         }
                     }
                 }
