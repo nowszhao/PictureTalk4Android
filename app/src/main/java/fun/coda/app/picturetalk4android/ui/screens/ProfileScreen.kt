@@ -41,12 +41,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import `fun`.coda.app.picturetalk4android.MainActivity
 import `fun`.coda.app.picturetalk4android.data.EnglishLevel
+import `fun`.coda.app.picturetalk4android.utils.AppVersionUtils
 
 @Composable
 fun ProfileScreen(activity: MainActivity) {
@@ -283,7 +285,7 @@ fun ProfileScreen(activity: MainActivity) {
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
-                        text = "1.0.2",
+                        text = AppVersionUtils.getVersionName(LocalContext.current),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

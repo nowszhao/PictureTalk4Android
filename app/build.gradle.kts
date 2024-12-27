@@ -13,8 +13,8 @@ android {
         applicationId = "fun.coda.app.picturetalk4android"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -43,10 +43,11 @@ android {
     }
 
     applicationVariants.all {
+        val variant = this
         outputs.all {
-            val outputImpl = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            val apkName = "PictureTalk-1.0.2.apk"
-            outputImpl.outputFileName = apkName
+            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            val versionName = variant.versionName
+            output.outputFileName = "PictureTalk-${versionName}.apk"
         }
     }
 }
