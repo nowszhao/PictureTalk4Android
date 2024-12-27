@@ -45,7 +45,7 @@ android {
     applicationVariants.all {
         outputs.all {
             val outputImpl = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            val apkName = "PictureTalk-1.0.1.apk"
+            val apkName = "PictureTalk-1.0.2.apk"
             outputImpl.outputFileName = apkName
         }
     }
