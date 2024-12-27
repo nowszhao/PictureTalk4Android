@@ -33,6 +33,11 @@ import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.derivedStateOf
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -52,39 +57,85 @@ fun TaskListScreen(
     var analysisToDelete by remember { mutableStateOf<ImageAnalysisWithWords?>(null) }
     var isMultiSelectMode by remember { mutableStateOf(false) }
     var selectedItems by remember { mutableStateOf(setOf<Long>()) }
+    var searchQuery by remember { mutableStateOf("") }
     
+    // 过滤后的列表
+    val filteredAnalyses by remember(analyses, searchQuery) {
+        derivedStateOf {
+            if (searchQuery.isBlank()) {
+                analyses
+            } else {
+                analyses.filter { analysis ->
+                    analysis.analysis.sentence.english?.contains(searchQuery, ignoreCase = true) == true ||
+                    analysis.analysis.sentence.chinese?.contains(searchQuery) == true
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(if (isMultiSelectMode) "${selectedItems.size} 已选择" else "任务列表") },
-                navigationIcon = {
-                    IconButton(
-                        onClick = if (isMultiSelectMode) {
-                            { isMultiSelectMode = false; selectedItems = emptySet() }
-                        } else onBackClick
-                    ) {
-                        Icon(
-                            imageVector = if (isMultiSelectMode) Icons.Default.Close else Icons.Default.ArrowBack,
-                            contentDescription = if (isMultiSelectMode) "取消选择" else "返回首页"
-                        )
-                    }
-                },
-                actions = {
-                    if (isMultiSelectMode && selectedItems.isNotEmpty()) {
+            Column {
+                TopAppBar(
+                    title = { Text(if (isMultiSelectMode) "${selectedItems.size} 已选择" else "任务列表") },
+                    navigationIcon = {
                         IconButton(
-                            onClick = {
-                                showDeleteDialog = true
-                            }
+                            onClick = if (isMultiSelectMode) {
+                                { isMultiSelectMode = false; selectedItems = emptySet() }
+                            } else onBackClick
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "删除选中项",
-                                tint = Color.Red
+                                imageVector = if (isMultiSelectMode) Icons.Default.Close else Icons.Default.ArrowBack,
+                                contentDescription = if (isMultiSelectMode) "取消选择" else "返回首页"
                             )
                         }
+                    },
+                    actions = {
+                        if (isMultiSelectMode && selectedItems.isNotEmpty()) {
+                            IconButton(
+                                onClick = { showDeleteDialog = true }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "删除选中项",
+                                    tint = Color.Red
+                                )
+                            }
+                        }
                     }
-                }
-            )
+                )
+                
+                // 搜索栏
+                TextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    placeholder = { Text("搜索句子...") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "搜索"
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = "清除搜索"
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedContainerColor = MaterialTheme.colorScheme.surface
+                    )
+                )
+            }
         }
     ) { paddingValues ->
         Column(
@@ -93,7 +144,6 @@ fun TaskListScreen(
                 .padding(paddingValues)
                 .background(Color(0xFFE3F2FD))
         ) {
-            // Pull to refresh
             val refreshState = rememberPullRefreshState(
                 refreshing = false,
                 onRefresh = { /* 实现刷新逻辑 */ }
@@ -102,7 +152,7 @@ fun TaskListScreen(
             Box(modifier = Modifier.pullRefresh(refreshState)) {
                 LazyColumn {
                     // 解析中的任务组
-                    val processingImages = analyses.filter { it.analysis.status == AnalysisStatus.PROCESSING }
+                    val processingImages = filteredAnalyses.filter { it.analysis.status == AnalysisStatus.PROCESSING }
                     if (processingImages.isNotEmpty()) {
                         item {
                             TaskGroupHeader(
@@ -142,8 +192,8 @@ fun TaskListScreen(
                         item { Spacer(modifier = Modifier.height(16.dp)) }
                     }
 
-                    // 已完成的任务组
-                    val completedImages = analyses.filter { it.analysis.status == AnalysisStatus.COMPLETED }
+                    // 已完��的任务组
+                    val completedImages = filteredAnalyses.filter { it.analysis.status == AnalysisStatus.COMPLETED }
                     if (completedImages.isNotEmpty()) {
                         item {
                             TaskGroupHeader(
@@ -180,6 +230,27 @@ fun TaskListScreen(
                                     }
                                 }
                             )
+                        }
+                    }
+
+                    // 显示空状态
+                    if (filteredAnalyses.isEmpty()) {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillParentMaxSize()
+                                    .padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                if (searchQuery.isNotEmpty()) {
+                                    Text(
+                                        text = "没有找到匹配的结果",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                 }
