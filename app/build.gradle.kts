@@ -93,4 +93,7 @@ dependencies {
     ksp("androidx.room:room-compiler:$roomVersion")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.compose.material3:material3:1.2.0")
+    implementation("androidx.compose.material:material:1.6.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    implementation(libs.androidx.lifecycle.runtime.compose)
 }

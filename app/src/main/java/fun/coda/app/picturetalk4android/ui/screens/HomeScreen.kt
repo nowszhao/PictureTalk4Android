@@ -86,6 +86,7 @@ import androidx.compose.ui.zIndex
 fun HomeScreen(
     analyses: List<ImageAnalysisWithWords>,
     onTaskListClick: () -> Unit,
+    selectedImageId: Long? = null
 ) {
     val pagerState = rememberPagerState(pageCount = { analyses.size })
     var isPlaying by remember { mutableStateOf(false) }
@@ -102,6 +103,16 @@ fun HomeScreen(
     LaunchedEffect(pagerState.currentPage) {
         isPlaying = false
         currentPlayingWord = null
+    }
+
+    // 处理选中图片的滚动
+    LaunchedEffect(selectedImageId) {
+        if (selectedImageId != null) {
+            val index = analyses.indexOfFirst { it.analysis.id == selectedImageId }
+            if (index != -1) {
+                pagerState.scrollToPage(index)
+            }
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {

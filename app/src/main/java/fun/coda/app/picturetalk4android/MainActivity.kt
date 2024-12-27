@@ -62,6 +62,9 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import androidx.compose.runtime.collectAsState
 
 
 enum class Screen(val title: String) {
@@ -307,7 +310,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val navController = rememberNavController()
                     
-                    // 修改这部分代码
+                    // 修改这���分代码
                     LaunchedEffect(Unit) {
                         if (!isKimiConfigured()) {
                             // 等待导航图设置完成后再导航
@@ -364,11 +367,13 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.padding(innerPadding)
                         ) {
                             composable(Screen.Home.name) { 
+                                val selectedId by selectedImageId.collectAsState()
                                 HomeScreen(
                                     analyses = analysisResults,
                                     onTaskListClick = {
                                         navController.navigate(Screen.TaskList.name)
-                                    }
+                                    },
+                                    selectedImageId = selectedId
                                 )
                             }
                             composable(Screen.Camera.name) { 
@@ -384,6 +389,7 @@ class MainActivity : ComponentActivity() {
                                 TaskListScreen(
                                     analyses = analysisResults,
                                     onImageClick = { analysis ->
+                                        setSelectedImage(analysis.analysis.id)  // 设置选中的图片
                                         navController.navigate(Screen.Home.name) {
                                             popUpTo(Screen.Home.name) {
                                                 inclusive = true
@@ -512,6 +518,15 @@ class MainActivity : ComponentActivity() {
             apply()
         }
         KimiService.configure(null, null)
+    }
+
+    // 添加选中图片的状态
+    private val _selectedImageId = MutableStateFlow<Long?>(null)
+    val selectedImageId = _selectedImageId.asStateFlow()
+
+    // 添加设置选中图片的方法
+    fun setSelectedImage(id: Long?) {
+        _selectedImageId.value = id
     }
 }
 
