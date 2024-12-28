@@ -93,21 +93,28 @@ class ShareImageGenerator(private val context: Context) {
     }
 
     private fun drawImage(canvas: Canvas, bitmap: Bitmap, width: Int, height: Int) {
-        // 计算缩放比例，保持原始宽高比
-        val scale = Math.max(
-            width.toFloat() / bitmap.width,
-            height.toFloat() / bitmap.height
-        )
+        val imageRatio = bitmap.width.toFloat() / bitmap.height
+        val canvasRatio = width.toFloat() / height
         
-        // 计算居中位置
-        val scaledWidth = bitmap.width * scale
-        val scaledHeight = bitmap.height * scale
-        val left = (width - scaledWidth) / 2
-        val top = (height - scaledHeight) / 2
+        val (scaledWidth, scaledHeight, left, top) = if (imageRatio > canvasRatio) {
+            // 图片比画布更宽，以高度为基准缩放
+            val targetHeight = height.toFloat()
+            val targetWidth = targetHeight * imageRatio
+            val left = (width - targetWidth) / 2
+            Quadruple(targetWidth, targetHeight, left, 0f)
+        } else {
+            // 图片比画布更高，以宽度为基准缩放
+            val targetWidth = width.toFloat()
+            val targetHeight = targetWidth / imageRatio
+            val top = (height - targetHeight) / 2
+            Quadruple(targetWidth, targetHeight, 0f, top)
+        }
         
         // 创建矩阵进行变换
         val matrix = Matrix().apply {
-            setScale(scale, scale)
+            val scaleX = scaledWidth / bitmap.width
+            val scaleY = scaledHeight / bitmap.height
+            setScale(scaleX, scaleY)
             postTranslate(left, top)
         }
         
@@ -143,14 +150,41 @@ class ShareImageGenerator(private val context: Context) {
         val cardPaint = Paint().apply {
             isAntiAlias = true
             color = Color.YELLOW
-            alpha = 230 // 设置透明度
+            alpha = 230
             setShadowLayer(4f, 0f, 2f, Color.parseColor("#20000000"))
         }
 
+        // 计算图片实际显示区域
+        val originalBitmap = context.contentResolver.openInputStream(Uri.parse(analysis.analysis.imageUri))?.use {
+            BitmapFactory.decodeStream(it)
+        } ?: return
+
+        // 计算图片缩放和位置
+        val imageRatio = originalBitmap.width.toFloat() / originalBitmap.height
+        val canvasRatio = width.toFloat() / height
+        
+        val (scaledWidth, scaledHeight, imageLeft, imageTop) = if (imageRatio > canvasRatio) {
+            // 图片比画布更宽，以高度为基准缩放
+            val targetHeight = height.toFloat()
+            val targetWidth = targetHeight * imageRatio
+            val left = (width - targetWidth) / 2
+            Quadruple(targetWidth, targetHeight, left, 0f)
+        } else {
+            // 图片比画布更高，以宽度为基准缩放
+            val targetWidth = width.toFloat()
+            val targetHeight = targetWidth / imageRatio
+            val top = (height - targetHeight) / 2
+            Quadruple(targetWidth, targetHeight, 0f, top)
+        }
+
+        originalBitmap.recycle()
+
         analysis.words.forEach { word ->
             val coordinates = word.location?.split(",")?.map { it.trim().toFloat() } ?: listOf(0f, 0f)
-            val xPos = coordinates[0] * width + (word.offset_x ?: 0f)
-            val yPos = coordinates[1] * height + (word.offset_y ?: 0f)
+            
+            // 计算基于实际图片显示区域的坐标
+            val xPos = coordinates[0] * scaledWidth + imageLeft + (word.offset_x ?: 0f)
+            val yPos = coordinates[1] * scaledHeight + imageTop + (word.offset_y ?: 0f)
 
             val cardWidth = 300f
             val cardHeight = 160f
@@ -269,4 +303,12 @@ class ShareImageGenerator(private val context: Context) {
             paint
         )
     }
-} 
+}
+
+// 添加一个数据类来存储四个值
+private data class Quadruple<T>(
+    val first: T,
+    val second: T,
+    val third: T,
+    val fourth: T
+) 

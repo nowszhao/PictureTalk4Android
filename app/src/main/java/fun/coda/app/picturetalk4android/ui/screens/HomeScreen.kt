@@ -70,6 +70,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Rect
+import android.util.Log
 import android.view.View
 import androidx.compose.ui.platform.LocalView
 import androidx.core.content.FileProvider
@@ -85,6 +86,12 @@ import androidx.compose.ui.zIndex
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import `fun`.coda.app.picturetalk4android.utils.ShareImageGenerator
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.MutableState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -100,6 +107,21 @@ fun HomeScreen(
     var imageSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedWord by remember { mutableStateOf<String?>(null) }
     var playedWords by remember { mutableStateOf(setOf<String>()) }
+    
+    // 将单词位置状态提升到这里
+    val wordOffsets = remember(analyses) {
+        mutableStateMapOf<String, MutableState<Offset>>().apply {
+            analyses.forEach { analysis ->
+                analysis.words.forEach { word ->
+                    val key = "${analysis.analysis.id}_${word.word}"
+                    if (!containsKey(key)) {
+                        put(key, mutableStateOf(Offset(word.offset_x ?: 0f, word.offset_y ?: 0f)))
+                    }
+                }
+            }
+        }
+    }
+    
     val context = LocalContext.current
     val repository = remember {
         ImageAnalysisRepository(AppDatabase.getDatabase(context).imageAnalysisDao())
@@ -263,52 +285,29 @@ fun HomeScreen(
                                 .fillMaxSize()
                                 .zIndex(2f)
                         ) {
-                            // 先渲染非选中和非播放的词
-                            analysis.words
-                                .filter { it.word != currentPlayingWord && it.word != selectedWord }
-                                .forEach { word ->
-                                    RenderWordCard(
-                                        word = word,
-                                        imageSize = imageSize,
-                                        currentPlayingWord = currentPlayingWord,
-                                        selectedWord = selectedWord,
-                                        playedWords = playedWords,
-                                        onSelectedWordChange = { selectedWord = it },
-                                        repository = repository,
-                                        isTopLayer = false
-                                    )
+                            analysis.words.forEach { word ->
+                                val isPlaying = word.word == currentPlayingWord
+                                val isSelected = word.word == selectedWord
+                                
+                                val key = "${analysis.analysis.id}_${word.word}"
+                                val offsetState = wordOffsets.getOrPut(key) {
+                                    mutableStateOf(Offset(word.offset_x ?: 0f, word.offset_y ?: 0f))
                                 }
-                            
-                            // 渲染选中的单词（如果有）
-                            selectedWord?.let { selected ->
-                                analysis.words.find { it.word == selected }?.let { word ->
-                                    RenderWordCard(
-                                        word = word,
-                                        imageSize = imageSize,
-                                        currentPlayingWord = currentPlayingWord,
-                                        selectedWord = selectedWord,
-                                        playedWords = playedWords,
-                                        onSelectedWordChange = { selectedWord = it },
-                                        repository = repository,
-                                        isTopLayer = true
-                                    )
-                                }
-                            }
-                            
-                            // 最后渲染当前播放的单词（如果有）
-                            currentPlayingWord?.let { playing ->
-                                analysis.words.find { it.word == playing }?.let { word ->
-                                    RenderWordCard(
-                                        word = word,
-                                        imageSize = imageSize,
-                                        currentPlayingWord = currentPlayingWord,
-                                        selectedWord = selectedWord,
-                                        playedWords = playedWords,
-                                        onSelectedWordChange = { selectedWord = it },
-                                        repository = repository,
-                                        isTopLayer = true
-                                    )
-                                }
+                                
+                                RenderWordCard(
+                                    word = word,
+                                    imageSize = imageSize,
+                                    currentPlayingWord = currentPlayingWord,
+                                    selectedWord = selectedWord,
+                                    playedWords = playedWords,
+                                    onSelectedWordChange = { selectedWord = it },
+                                    repository = repository,
+                                    isTopLayer = isPlaying || isSelected,
+                                    offset = offsetState,
+                                    onOffsetChange = { newOffset ->
+                                        offsetState.value = newOffset
+                                    }
+                                )
                             }
                         }
                     }
@@ -489,52 +488,32 @@ fun ImageWithWords(
         )
 
         if (imageSize != IntSize.Zero) {
-            // 先渲染非选中和非播放的词
-            imageAnalysis.words
-                .filter { it.word != currentPlayingWord && it.word != selectedWord }
-                .forEach { word ->
-                    RenderWordCard(
-                        word = word,
-                        imageSize = imageSize,
-                        currentPlayingWord = currentPlayingWord,
-                        selectedWord = selectedWord,
-                        playedWords = playedWords,
-                        onSelectedWordChange = { selectedWord = it },
-                        repository = repository,
-                        isTopLayer = false
-                    )
-                }
-            
-            // 渲染选中的单词（如果有）
-            selectedWord?.let { selected ->
-                imageAnalysis.words.find { it.word == selected }?.let { word ->
-                    RenderWordCard(
-                        word = word,
-                        imageSize = imageSize,
-                        currentPlayingWord = currentPlayingWord,
-                        selectedWord = selectedWord,
-                        playedWords = playedWords,
-                        onSelectedWordChange = { selectedWord = it },
-                        repository = repository,
-                        isTopLayer = true
-                    )
-                }
-            }
-            
-            // 最后渲染当前播放的单词（如果有）
-            currentPlayingWord?.let { playing ->
-                imageAnalysis.words.find { it.word == playing }?.let { word ->
-                    RenderWordCard(
-                        word = word,
-                        imageSize = imageSize,
-                        currentPlayingWord = currentPlayingWord,
-                        selectedWord = selectedWord,
-                        playedWords = playedWords,
-                        onSelectedWordChange = { selectedWord = it },
-                        repository = repository,
-                        isTopLayer = true
-                    )
-                }
+            // 一次性渲染所有单词，根据状态决定渲染层级
+            imageAnalysis.words.forEach { word ->
+                val isPlaying = word.word == currentPlayingWord
+                val isSelected = word.word == selectedWord
+                
+                // 获取正确的位置状态
+                val offsetState = wordOffsets["${imageAnalysis.analysis.id}_${word.word}"]
+                    ?: remember { mutableStateOf(Offset(word.offset_x ?: 0f, word.offset_y ?: 0f)) }
+                
+                // 计算渲染层级
+                val isTopLayer = isPlaying || isSelected
+                
+                RenderWordCard(
+                    word = word,
+                    imageSize = imageSize,
+                    currentPlayingWord = currentPlayingWord,
+                    selectedWord = selectedWord,
+                    playedWords = playedWords,
+                    onSelectedWordChange = { selectedWord = it },
+                    repository = repository,
+                    isTopLayer = isTopLayer,
+                    offset = offsetState,
+                    onOffsetChange = { newOffset ->
+                        wordOffsets["${imageAnalysis.analysis.id}_${word.word}"]?.value = newOffset
+                    }
+                )
             }
         }
     }
@@ -549,15 +528,24 @@ private fun RenderWordCard(
     playedWords: Set<String>,
     onSelectedWordChange: (String?) -> Unit,
     repository: ImageAnalysisRepository,
-    isTopLayer: Boolean
+    isTopLayer: Boolean,
+    offset: MutableState<Offset>,
+    onOffsetChange: (Offset) -> Unit
 ) {
-    var offset by remember {
-        mutableStateOf(Offset(word.offset_x ?: 0f, word.offset_y ?: 0f))
-    }
     val scope = rememberCoroutineScope()
     val coordinates = word.location?.split(",")?.map { coord -> coord.trim().toFloat() } ?: listOf(0f, 0f)
-    val xPos = coordinates[0] * imageSize.width + offset.x
-    val yPos = coordinates[1] * imageSize.height + offset.y
+    
+    // 添加位置计算的日志
+    val xPos = coordinates[0] * imageSize.width + offset.value.x
+    val yPos = coordinates[1] * imageSize.height + offset.value.y
+    
+    Log.d("RenderWordCard", """
+        Word: ${word.word}
+        Base coordinates: ${coordinates[0]}, ${coordinates[1]}
+        Image size: $imageSize
+        Offset: ${offset.value}
+        Final position: $xPos, $yPos
+    """.trimIndent())
 
     Box(
         modifier = Modifier
@@ -570,26 +558,29 @@ private fun RenderWordCard(
             .graphicsLayer {
                 scaleX = if (isTopLayer) 1.01f else 1f
                 scaleY = if (isTopLayer) 1.01f else 1f
+                translationZ = if (isTopLayer) 8f else 0f
             }
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragEnd = {
-                        // 在拖动结束时保存新的位置
+                        Log.d("RenderWordCard", "Drag ended for word: ${word.word}")
                         scope.launch {
                             repository.updateWordOffsets(
                                 word.id,
                                 word.word ?: "",
-                                offset.x,
-                                offset.y
+                                offset.value.x,
+                                offset.value.y
                             )
                         }
                     }
                 ) { change, dragAmount ->
                     change.consume()
-                    offset = Offset(
-                        offset.x + dragAmount.x,
-                        offset.y + dragAmount.y
+                    val newOffset = Offset(
+                        offset.value.x + dragAmount.x,
+                        offset.value.y + dragAmount.y
                     )
+                    Log.d("RenderWordCard", "Dragging ${word.word} to offset: $newOffset")
+                    onOffsetChange(newOffset)
                 }
             }
     ) {
@@ -601,6 +592,7 @@ private fun RenderWordCard(
             isPlaying = currentPlayingWord == word.word,
             isSelected = selectedWord == word.word,
             onExpandChange = {
+                Log.d("RenderWordCard", "Word card clicked: ${word.word}")
                 onSelectedWordChange(if (selectedWord == word.word) null else word.word)
             }
         )
