@@ -1,5 +1,6 @@
 package `fun`.coda.app.picturetalk4android.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -142,8 +143,10 @@ data class WordEntity(
     val phoneticsymbols: String?,
     val explanation: String?,
     val location: String?,
-    var offset_x: Float = 0f,
-    var offset_y: Float = 0f
+    @ColumnInfo(name = "offset_x")
+    val offset_x: Float? = 0f,
+    @ColumnInfo(name = "offset_y")
+    val offset_y: Float? = 0f
 )
 
 data class ImageAnalysisWithWords(

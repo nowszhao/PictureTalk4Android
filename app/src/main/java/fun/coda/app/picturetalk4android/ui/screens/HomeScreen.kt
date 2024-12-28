@@ -555,7 +555,6 @@ private fun RenderWordCard(
         mutableStateOf(Offset(word.offset_x ?: 0f, word.offset_y ?: 0f))
     }
     val scope = rememberCoroutineScope()
-
     val coordinates = word.location?.split(",")?.map { coord -> coord.trim().toFloat() } ?: listOf(0f, 0f)
     val xPos = coordinates[0] * imageSize.width + offset.x
     val yPos = coordinates[1] * imageSize.height + offset.y
@@ -573,20 +572,24 @@ private fun RenderWordCard(
                 scaleY = if (isTopLayer) 1.01f else 1f
             }
             .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
+                detectDragGestures(
+                    onDragEnd = {
+                        // 在拖动结束时保存新的位置
+                        scope.launch {
+                            repository.updateWordOffsets(
+                                word.id,
+                                word.word ?: "",
+                                offset.x,
+                                offset.y
+                            )
+                        }
+                    }
+                ) { change, dragAmount ->
                     change.consume()
                     offset = Offset(
                         offset.x + dragAmount.x,
                         offset.y + dragAmount.y
                     )
-                    scope.launch {
-                        repository.updateWordOffsets(
-                            word.id,
-                            word.word ?: "",
-                            offset.x,
-                            offset.y
-                        )
-                    }
                 }
             }
     ) {

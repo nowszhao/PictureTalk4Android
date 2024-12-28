@@ -17,9 +17,14 @@ class ImageAnalysisRepository(private val imageAnalysisDao: ImageAnalysisDao) {
         imageAnalysisDao.deleteAll()
     }
 
-    suspend fun updateWordOffsets(imageId: Long, word: String, offsetX: Float, offsetY: Float) {
+    suspend fun updateWordOffsets(
+        wordId: Long,
+        word: String,
+        offsetX: Float,
+        offsetY: Float
+    ) {
         withContext(Dispatchers.IO) {
-            imageAnalysisDao.updateWordOffsets(imageId, word, offsetX, offsetY)
+            imageAnalysisDao.updateWordOffsets(wordId, offsetX, offsetY)
         }
     }
 
