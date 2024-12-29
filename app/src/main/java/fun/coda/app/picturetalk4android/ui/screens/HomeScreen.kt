@@ -1,7 +1,12 @@
 package `fun`.coda.app.picturetalk4android.ui.screens
 
 
+import android.content.Intent
 import android.net.Uri
+import android.util.Log
+import android.widget.Toast
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,20 +22,26 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -40,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -49,49 +61,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
-import `fun`.coda.app.picturetalk4android.MainActivity
-import `fun`.coda.app.picturetalk4android.data.AppDatabase
-import `fun`.coda.app.picturetalk4android.data.ImageAnalysisRepository
+import `fun`.coda.app.picturetalk4android.Screen
+import `fun`.coda.app.picturetalk4android.data.*
+import `fun`.coda.app.picturetalk4android.utils.AudioService
+import `fun`.coda.app.picturetalk4android.utils.ShareImageGenerator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
-import `fun`.coda.app.picturetalk4android.utils.AudioService
-import `fun`.coda.app.picturetalk4android.data.*
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Badge
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.graphicsLayer
-import android.app.Activity
-import android.content.Context
-import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Rect
-import android.util.Log
-import android.view.View
-import androidx.compose.ui.platform.LocalView
-import androidx.core.content.FileProvider
-import java.io.File
-import java.io.FileOutputStream
-import android.widget.Toast
-import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
-import `fun`.coda.app.picturetalk4android.Screen
-import androidx.compose.ui.zIndex
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import `fun`.coda.app.picturetalk4android.utils.ShareImageGenerator
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.MutableState
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -108,7 +89,6 @@ fun HomeScreen(
     var selectedWord by remember { mutableStateOf<String?>(null) }
     var playedWords by remember { mutableStateOf(setOf<String>()) }
     
-    // 将单词位置状态提升到这里
     val wordOffsets = remember(analyses) {
         mutableStateMapOf<String, MutableState<Offset>>().apply {
             analyses.forEach { analysis ->
@@ -464,16 +444,13 @@ fun HomeScreen(
 fun ImageWithWords(
     imageAnalysis: ImageAnalysisWithWords,
     modifier: Modifier = Modifier,
-    currentPlayingWord: String? = null
+    currentPlayingWord: String? = null,
+    wordOffsets: MutableMap<String, MutableState<Offset>>,
+    repository: ImageAnalysisRepository
 ) {
     var imageSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedWord by remember { mutableStateOf<String?>(null) }
     var playedWords by remember { mutableStateOf(setOf<String>()) }
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val repository = remember {
-        ImageAnalysisRepository(AppDatabase.getDatabase(context).imageAnalysisDao())
-    }
 
     Box(modifier = modifier) {
         AsyncImage(
@@ -488,17 +465,12 @@ fun ImageWithWords(
         )
 
         if (imageSize != IntSize.Zero) {
-            // 一次性渲染所有单词，根据状态决定渲染层级
             imageAnalysis.words.forEach { word ->
                 val isPlaying = word.word == currentPlayingWord
                 val isSelected = word.word == selectedWord
                 
-                // 获取正确的位置状态
                 val offsetState = wordOffsets["${imageAnalysis.analysis.id}_${word.word}"]
                     ?: remember { mutableStateOf(Offset(word.offset_x ?: 0f, word.offset_y ?: 0f)) }
-                
-                // 计算渲染层级
-                val isTopLayer = isPlaying || isSelected
                 
                 RenderWordCard(
                     word = word,
@@ -508,10 +480,10 @@ fun ImageWithWords(
                     playedWords = playedWords,
                     onSelectedWordChange = { selectedWord = it },
                     repository = repository,
-                    isTopLayer = isTopLayer,
+                    isTopLayer = isPlaying || isSelected,
                     offset = offsetState,
                     onOffsetChange = { newOffset ->
-                        wordOffsets["${imageAnalysis.analysis.id}_${word.word}"]?.value = newOffset
+                        offsetState.value = newOffset
                     }
                 )
             }
@@ -558,7 +530,7 @@ private fun RenderWordCard(
             .graphicsLayer {
                 scaleX = if (isTopLayer) 1.01f else 1f
                 scaleY = if (isTopLayer) 1.01f else 1f
-                translationZ = if (isTopLayer) 8f else 0f
+                shadowElevation = if (isTopLayer) 8f else 0f
             }
             .pointerInput(Unit) {
                 detectDragGestures(
