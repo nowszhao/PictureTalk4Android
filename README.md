@@ -48,16 +48,16 @@ _一款基于场景的英语单词学习应用。_
 
 ## 安装方式
 
-1. 从 GitHub Releases 下载最新版本的 APK 安装包
+1. 从 [GitHub Releases](https://github.com/nowszhao/PictureTalk4Android/releases/latest) 下载最新版本的 APK 安装包
 2. 允许安装来自未知来源的应用
 3. 安装完成后即可使用
 4. 配置KIMI AI 的 Token,参考下图：
    1. 使用 chrome浏览器登录KIMI网页版 https://kimi.moonshot.cn/
-   2. 鼠标右键点击“检查”
+   2. 鼠标右键点击"检查"
     ![alt text](icons/kimi-token-step1.png)
-   3. 在弹出的窗口中，依次点击“应用”->"存储"->"本地存储空间"->"https://kimi.moonshot.cn"
+   3. 在弹出的窗口中，依次点击"应用"->"存储"->"本地存储空间"->"https://kimi.moonshot.cn"
     ![alt text](icons/kimi-token-step2.png)
-   4. 在右侧的“值”中找到"access_token"，复制其值
+   4. 在右侧的"值"中找到"access_token"，复制其值
     ![alt text](icons/kimi-token-step3.png)
 
 
