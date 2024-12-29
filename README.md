@@ -1,6 +1,6 @@
 # PictureTalk
 
-说明：本项目为 PictureTalk 的 Android 版本，功能同[iOS版本](https://github.com/nowszhao/PictureTalk)
+说明：本项目为 PictureTalk 的 Android 版本，[iOS版本](https://github.com/nowszhao/PictureTalk)
 
 <p align="center">
 <img src="icons/PictureTalkApp.png" width="350" height="350"/>
