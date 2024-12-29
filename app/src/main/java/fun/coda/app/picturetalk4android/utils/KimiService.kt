@@ -17,6 +17,14 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import `fun`.coda.app.picturetalk4android.data.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlin.coroutines.suspendCoroutine
 
 class KimiService {
     companion object {
@@ -25,8 +33,29 @@ class KimiService {
         
         private var authToken: String? = null
         
+        // 添加任务队列
+        private val analysisQueue = Channel<AnalysisTask>(Channel.UNLIMITED)
+        private var queueJob: Job? = null
+        
         fun configure(token: String?, key: String?) {
             authToken = token
+            // 启动队列处理协程
+            if (queueJob == null) {
+                queueJob = CoroutineScope(Dispatchers.IO).launch {
+                    processQueue()
+                }
+            }
+        }
+
+        private suspend fun processQueue() {
+            for (task in analysisQueue) {
+                try {
+                    val result = task.service.executeAnalysis(task)
+                    task.onComplete(Result.success(result))
+                } catch (e: Exception) {
+                    task.onComplete(Result.failure(e))
+                }
+            }
         }
         
         fun getAuthHeader(): String {
@@ -36,6 +65,17 @@ class KimiService {
             }
         }
     }
+
+    // 添加任务数据类
+    private data class AnalysisTask(
+        val fileId: String,
+        val fileName: String,
+        val fileSize: Int,
+        val fileDetail: FileDetailResponse,
+        val englishLevel: EnglishLevel,
+        val service: KimiService,
+        val onComplete: (Result<AnalysisResponse>) -> Unit
+    )
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -108,31 +148,53 @@ class KimiService {
         fileDetail: FileDetailResponse,
         englishLevel: EnglishLevel
     ): AnalysisResponse {
-        var chatId = createChat()  // Ensure chatId is available
-        Log.d(TAG, "开始分析图片: fileId=$fileId, fileName=$fileName, fileSize=$fileSize, chatId=$chatId")
+        return suspendCoroutine { continuation ->
+            val task = AnalysisTask(
+                fileId = fileId,
+                fileName = fileName,
+                fileSize = fileSize,
+                fileDetail = fileDetail,
+                englishLevel = englishLevel,
+                service = this
+            ) { result ->
+                result.fold(
+                    onSuccess = { continuation.resume(it) },
+                    onFailure = { continuation.resumeWithException(it) }
+                )
+            }
+            
+            runBlocking {
+                analysisQueue.send(task)
+            }
+        }
+    }
 
-        // 创建 FileRef
+    // 添加实际执行分析的内部方法
+    private suspend fun executeAnalysis(task: AnalysisTask): AnalysisResponse {
+        chatId = createChat()
+        Log.d(TAG, "开始分析图片: fileId=${task.fileId}, fileName=${task.fileName}, fileSize=${task.fileSize}, chatId=$chatId")
+
         val fileRef = FileRef(
-            id = fileId,
-            name = fileName,
-            size = fileSize,
+            id = task.fileId,
+            name = task.fileName,
+            size = task.fileSize,
             detail = FileDetail(
-                id = fileDetail.id,
-                name = fileDetail.name,
-                size = fileSize
+                id = task.fileDetail.id,
+                name = task.fileDetail.name,
+                size = task.fileSize
             ),
             file_info = FileDetail(
-                id = fileDetail.id,
-                name = fileDetail.name,
-                size = fileSize
+                id = task.fileDetail.id,
+                name = task.fileDetail.name,
+                size = task.fileSize
             )
         )
 
         val prompt = """
-        我作为一个英语水平为${englishLevel.title}的学习者，我想通过图片场景化学习新的英语词块，请分析我提供的图片，提供以下信息：
+        我作为一个英语水平为${task.englishLevel.title}的学习者，我想通过图片场景化学习新的英语词块，请分析我提供的图片，提供以下信息：
         1、词块：
-          - 图片场景中我可以学习到相对${englishLevel.title}水平之上的 Top8英语词块，信息包括词块、音标和中文解释、词块所在图片大致位置（词块指向物品中的一个点表示，x 和 y 坐标，归一化到0~1的范围，精度为后四位小数点，词块之间的位置不要重叠）
-          - 英语词块（chunk）是指在语言处理中，作为一个整体来理解和使用的一组词或短语。词块可��是固定搭配、习惯用语、短语动词、常见的表达方式等。它们在语言中频繁出现，具有一定的固定性和连贯性，使得学习者能够更自然地使用语言。
+          - 图片场景中我可以学习到相对${task.englishLevel.title}水平之上的 Top8英语词块，信息包括词块、音标和中文解释、词块所在图片大致位置（词块指向物品中的一个点表示，x 和 y 坐标，归一化到0~1的范围，精度为后四位小数点，词块之间的位置不要重叠）
+          - 英语词块（chunk）是指在语言处理中，作为一个整体来理解和使用的一组词或短语。词块可以是固定搭配、习惯用语、短语动词、常见的表达方式等。它们在语言中频繁出现，具有一定的固定性和连贯性，使得学习者能够更自然地使用语言。
         2、句子
           - 使用一句最简单、准确的英语描述图片内容。
           - 提供地道的中文翻译。
@@ -156,7 +218,7 @@ class KimiService {
 
         val analysisRequest = ImageAnalysisRequest(
             messages = listOf(Message("user", prompt)),
-            refs = listOf(fileId),
+            refs = listOf(task.fileId),
             refs_file = listOf(fileRef)
         )
 

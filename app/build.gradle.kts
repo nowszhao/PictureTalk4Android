@@ -97,4 +97,5 @@ dependencies {
     implementation("androidx.compose.material:material:1.6.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.1")
 }
